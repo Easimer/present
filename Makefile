@@ -1,5 +1,5 @@
-CFLAGS_X11=$(shell pkg-config x11-xcb --cflags)
-LDFLAGS_X11=$(shell pkg-config x11-xcb --libs)
+CFLAGS_X11=$(shell pkg-config x11-xcb xcb-image xcb-util --cflags)
+LDFLAGS_X11=$(shell pkg-config x11-xcb xcb-image xcb-util --libs)
 
 CXXFLAGS=$(CFLAGS_X11) -Wall -g -O0
 LDFLAGS=$(LDFLAGS_X11)

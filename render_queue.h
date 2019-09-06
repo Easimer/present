@@ -21,6 +21,7 @@ enum rq_cmd {
     RQCMD_INVALID = 0,
     RQCMD_DRAW_TEXT,
     RQCMD_DRAW_IMAGE,
+    RQCMD_DRAW_RECTANGLE,
     RQCMD_MAX
 };
 
@@ -33,6 +34,7 @@ struct rq_draw_text {
     rq_draw_cmd hdr;
     int x, y;
     int size;
+    int text_len;
     const char* text;
 };
 
@@ -40,7 +42,11 @@ struct rq_draw_image {
     rq_draw_cmd hdr;
     int x, y;
     int width, height;
-    void* rgba_buffer; // R8B8G8 format
+    void* buffer; // R8B8G8 format
+};
+
+struct rq_draw_rect {
+    rq_draw_cmd hdr;
 };
 
 struct render_queue {
@@ -55,10 +61,10 @@ void rq_free(render_queue* rq);
 void rq_clear(render_queue* rq);
 void* rq_new_cmd(render_queue* rq, unsigned size);
 
-#ifdef __cplusplus__
+#ifdef __cplusplus
 template<typename T>
 inline T* rq_new_cmd(render_queue* rq, rq_cmd cmd = RQCMD_INVALID) {
-    T* ret = rq_new_cmd(rq, sizeof(T));
+    T* ret = (T*)rq_new_cmd(rq, sizeof(T));
 
     ret->hdr.cmd = cmd;
     ret->hdr.next = NULL;

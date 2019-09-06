@@ -38,25 +38,26 @@ static void render_loop(const char* filename) {
             // Loop until the presentation is over or
             // the user has requested an exit (by pressing ESC)
             while(!present_over(file) && !requested_exit) {
-                fprintf(stderr, "Redraw!\n");
                 // Wait for an event
                 if(display_fetch_event(disp, &ev)) {
-                    fprintf(stderr, "Event!\n");
+                    int f;
                     switch(ev) {
                         case DISPEV_PREV:
-                            present_seek(file, -1);
+                            f = present_seek(file, -1);
                             break;
                         case DISPEV_NEXT:
-                            present_seek(file, 1);
+                            f = present_seek(file, 1);
                             break;
                         case DISPEV_START:
-                            present_seek_to(file, 0);
+                            f = present_seek_to(file, 0);
                             break;
                         case DISPEV_END:
-                            present_seek_to(file, -1);
+                            f = present_seek_to(file, -1);
                             break;
                         case DISPEV_EXIT:
                             requested_exit = true;
+                            break;
+                        case DISPEV_NONE:
                             break;
                         default:
                             assert(0);

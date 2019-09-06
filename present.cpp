@@ -78,6 +78,7 @@ struct present_file {
     int slide_count;
     int current_slide;
     present_slide* slides;
+    present_slide* current_slide_data;
 };
 
 struct parse_state {
@@ -161,6 +162,7 @@ static void append_slide(present_file* file, parse_state* state) {
     } else {
         state->first = state->last = next_slide;
     }
+    file->slide_count++;
 }
 
 static void set_chapter_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
@@ -265,7 +267,7 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     temp_path[path_len] = 0;
 
     // Load pixel data
-    pixbuf = stbi_load(temp_path, &x, &y, &channels, STBI_rgb);
+    pixbuf = stbi_load(temp_path, &x, &y, &channels, STBI_rgb_alpha);
 
     free(temp_path);
     temp_path = NULL;
@@ -274,7 +276,7 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     restore_workdir(&prev_workdir);
 
     if(pixbuf) {
-        unsigned pixbuf_siz = sizeof(stbi_uc) * x * y * channels;
+        unsigned pixbuf_siz = sizeof(stbi_uc) * x * y * 4;
         pixbuf_final = (stbi_uc*)arena_alloc(file->mem, pixbuf_siz);
         memcpy(pixbuf_final, pixbuf, pixbuf_siz);
         stbi_image_free(pixbuf);
@@ -286,7 +288,7 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
 
     node->width = x;
     node->height = y;
-    node->buffer = pixbuf;
+    node->buffer = pixbuf_final;
 
     if(slide->content_cur) {
         if(slide->current_indent_level < indent_level) {
@@ -421,6 +423,7 @@ static bool parse_file(present_file* file, FILE* f) {
                     }
                 }
             }
+            file->slides = pstate.first;
         } else {
             fprintf(stderr, "#PRESENT header is missing from presentation file!\n");
             ret = false;
@@ -444,7 +447,7 @@ present_file* present_open(const char* filename) {
                 ret->mem = arena_create(PF_MEM_SIZE);
                 ret->title = NULL;
                 ret->authors = NULL;
-                ret->slide_count = 0;
+                ret->slide_count = 1; // implicit title slide
                 ret->current_slide = 0;
                 ret->slides = NULL;
                 if(!parse_file(ret, f)) {
@@ -475,28 +478,128 @@ bool present_over(present_file* file) {
     bool ret = true;
     assert(file);
     if(file) {
+        ret = file->current_slide > file->slide_count;
     }
     return ret;
 }
 
 int present_seek(present_file* file, int off) {
     int ret = 0;
+    int abs;
     assert(file);
     if(file) {
+        abs = file->current_slide + off;
+        ret = present_seek_to(file, abs);
     }
     return ret;
 }
 
-int present_seek_to(present_file* file, int idx) {
+int present_seek_to(present_file* file, int abs) {
     int ret = 0;
     assert(file);
     if(file) {
+        if(abs == -1) {
+            abs = file->slide_count - 1;
+        }
+
+        fprintf(stderr, "Jumping to slide %d/%d\n", abs, file->slide_count);
+        if(abs < 0) {
+            abs = 0;
+            file->current_slide_data = NULL;
+        } else if(abs > file->slide_count) {
+            abs = file->slide_count;
+            file->current_slide_data = NULL;
+        } else {
+            file->current_slide_data = file->slides;
+            for(int i = 1; i < abs; i++) {
+                file->current_slide_data = file->current_slide_data->next;
+            }
+            file->current_slide = abs;
+        }
+        ret = abs;
     }
     return ret;
+}
+
+static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
+    if(file->title_len && file->title) {
+        auto title = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        title->x = 10;
+        title->y = 32;
+        title->size = 20;
+        title->text_len = file->title_len;
+        title->text = file->title;
+    }
+
+    if(file->authors_len && file->authors) {
+        auto authors = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        authors->x = 14;
+        authors->y = 52;
+        authors->size = 20;
+        authors->text_len = file->authors_len;
+        authors->text = file->authors;
+    }
+}
+
+static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
+    // a filled rectangle covering the screen
+    auto rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
+}
+
+static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq) {
+    int x = 8;
+    int y = 54;
+
+    present_list_node* cur = slide->content;
+    while(cur) {
+        if(cur->type == LNODE_TEXT) {
+            rq_draw_text* cmd = NULL;
+            list_node_text* text = (list_node_text*)cur;
+            cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+            cmd->x = x;
+            cmd->y = y;
+            cmd->size = 20;
+            cmd->text_len = text->text_length;
+            cmd->text = text->text;
+            y += 22;
+        } else if(cur->type == LNODE_IMAGE) {
+            rq_draw_image* cmd = NULL;
+            list_node_image* img = (list_node_image*)cur;
+            cmd = rq_new_cmd<rq_draw_image>(rq, RQCMD_DRAW_IMAGE);
+            cmd->width = img->width;
+            cmd->height = img->height;
+            cmd->buffer = img->buffer;
+            assert(img->buffer);
+            y += img->width + 16;
+        }
+        if(cur->children) {
+            x += 8;
+            cur = cur->children;
+        } else {
+        }
+        if(cur->next) {
+            cur = cur->next;
+        } else {
+            x -= 8;
+            if(cur->parent) {
+                cur = cur->parent->next;
+            } else {
+                cur = NULL;
+            }
+        }
+    }
 }
 
 void present_fill_render_queue(present_file* file, render_queue* rq) {
     assert(file);
     if(file) {
+        if(file->current_slide == 0) {
+            present_fill_rq_title_slide(file, rq);
+        } else if(file->current_slide == file->slide_count) {
+            present_fill_rq_end_slide(file, rq);
+        } else {
+            auto slide = file->current_slide_data;
+            present_fill_rq_regular_slide(slide, rq);
+        }
     }
 }
