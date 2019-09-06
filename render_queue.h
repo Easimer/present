@@ -40,7 +40,7 @@ struct rq_draw_image {
     rq_draw_cmd hdr;
     int x, y;
     int width, height;
-    void* rgba_buffer; // R8B8G8A8 format
+    void* rgba_buffer; // R8B8G8 format
 };
 
 struct render_queue {

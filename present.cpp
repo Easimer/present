@@ -18,11 +18,15 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <assert.h>
+#include <unistd.h>
 #include "present.h"
 #include "arena.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
-#define PF_MEM_SIZE (8 * 1024)
+#define PF_MEM_SIZE (8 * 1024 * 1024)
 
 enum list_node_type {
     LNODE_INVALID = 0,
@@ -35,6 +39,7 @@ struct present_list_node {
     list_node_type type;
     present_list_node* next;
     present_list_node* children;
+    present_list_node* parent; // this is not the prev->prev of next!
 };
 
 struct list_node_text {
@@ -52,19 +57,34 @@ struct list_node_image {
 
 struct present_slide {
     const char* chapter_title; // optional
+    int subtitle_len;
     const char* subtitle; // optional
     present_slide* next;
+
+    present_list_node* content;
+    present_list_node* content_cur;
+    int current_indent_level;
 };
 
 struct present_file {
+    const char* path;
     mem_arena* mem;
 
+    unsigned title_len;
     const char* title;
+    unsigned authors_len;
     const char* authors;
     // Slides
     int slide_count;
     int current_slide;
     present_slide* slides;
+};
+
+struct parse_state {
+    present_slide* first;
+    present_slide* last;
+
+    const char* current_chapter_title;
 };
 
 static unsigned read_line(char* buf, unsigned bufsiz, unsigned* indent_level, FILE* f) {
@@ -128,6 +148,228 @@ static bool is_directive(const char** dirout, unsigned* dirlen, const char* buf,
     return ret;
 }
 
+static void append_slide(present_file* file, parse_state* state) {
+    assert(file && state);
+    present_slide* next_slide = (present_slide*)arena_alloc(file->mem, sizeof(present_slide));
+    next_slide->chapter_title = state->current_chapter_title;
+    next_slide->subtitle = NULL;
+    next_slide->next = NULL;
+    //fprintf(stderr, "=== SLIDE ===\n");
+    if(state->last != NULL) {
+        state->last->next = next_slide;
+        state->last = next_slide;
+    } else {
+        state->first = state->last = next_slide;
+    }
+}
+
+static void set_chapter_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
+    assert(file && state && title);
+
+    if(title_len == 0) {
+        state->current_chapter_title = NULL;
+    } else {
+        char* buf = (char*)arena_alloc(file->mem, title_len + 1);
+        memcpy(buf, title, title_len);
+        buf[title_len] = 0;
+        state->current_chapter_title = buf;
+    }
+}
+
+static void set_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
+    assert(file && state && title);
+
+    char* buf = (char*)arena_alloc(file->mem, title_len);
+    memcpy(buf, title, title_len);
+    file->title = buf;
+    file->title_len = title_len;
+}
+
+static void set_authors(present_file* file, parse_state* state, const char* authors, unsigned authors_len) {
+    assert(file && state && authors);
+
+    char* buf = (char*)arena_alloc(file->mem, authors_len);
+    memcpy(buf, authors, authors_len);
+    file->authors = buf;
+    file->authors_len = authors_len;
+}
+
+static void save_workdir(char** dst) {
+    assert(dst);
+    char *buf = NULL, *res = NULL;
+    int bufsiz = 64;
+    while(!buf) {
+        buf = (char*)malloc(bufsiz);
+        res = getcwd(buf, bufsiz);
+        if(!res) {
+            free(buf);
+            buf = NULL;
+            bufsiz *= 2;
+        }
+    }
+    *dst = buf;
+}
+
+static void restore_workdir(char** path) {
+    int res;
+    assert(path && *path);
+    res = chdir(*path);
+    *path = NULL;
+    if(res) {
+        fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
+    }
+}
+
+static void change_to_dir_of_file(const char* path) {
+    int res;
+    unsigned len = strlen(path);
+    char* buf = (char*)malloc(len + 1);
+    memcpy(buf, path, len + 1);
+    unsigned i = len;
+    while(buf[--i] != '/' && i > 0);
+    if(i != 0) {
+        buf[++i] = 0;
+        res = chdir(buf);
+        buf[i] = '/';
+        if(res) {
+            fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
+        }
+    }
+}
+
+static void add_inline_image(present_file* file, parse_state* state, int indent_level, const char* path, unsigned path_len) {
+    char* prev_workdir = NULL;
+    int x, y, channels;
+    list_node_image* node;
+    char* temp_path;
+    auto slide = state->last;
+    stbi_uc* pixbuf = NULL;
+    stbi_uc* pixbuf_final = NULL;
+    if(!slide) {
+        fprintf(stderr, "No #SLIDE directive before content!\n");
+    }
+    assert(slide);
+    node = (list_node_image*)arena_alloc(file->mem, sizeof(list_node_image));
+    node->hdr.type = LNODE_IMAGE;
+    node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
+
+    save_workdir(&prev_workdir);
+    change_to_dir_of_file(file->path);
+
+    // Copy path to a temp buf and make it zero
+    // terminated because stbi wants it that way :(
+    //arena_push_frame(file->mem);
+    //temp_path = (char*)arena_alloc(file->mem, path_len + 1);
+    temp_path = (char*)malloc(path_len + 1);
+    memcpy(temp_path, path, path_len);
+    temp_path[path_len] = 0;
+
+    // Load pixel data
+    pixbuf = stbi_load(temp_path, &x, &y, &channels, STBI_rgb);
+
+    free(temp_path);
+    temp_path = NULL;
+    //arena_pop_frame(file->mem);
+
+    restore_workdir(&prev_workdir);
+
+    if(pixbuf) {
+        unsigned pixbuf_siz = sizeof(stbi_uc) * x * y * channels;
+        pixbuf_final = (stbi_uc*)arena_alloc(file->mem, pixbuf_siz);
+        memcpy(pixbuf_final, pixbuf, pixbuf_siz);
+        stbi_image_free(pixbuf);
+        pixbuf = NULL;
+    } else {
+        fprintf(stderr, "Failed to load image '%.*s': %s!\n", path_len, path, stbi_failure_reason());
+    }
+    assert(pixbuf_final);
+
+    node->width = x;
+    node->height = y;
+    node->buffer = pixbuf;
+
+    if(slide->content_cur) {
+        if(slide->current_indent_level < indent_level) {
+            //fprintf(stderr, "Indent IN to %d from %d\n", indent_level, slide->current_indent_level);
+            node->hdr.parent = slide->content_cur;
+            slide->content_cur->children = (present_list_node*)node;
+            slide->content_cur = (present_list_node*) node;
+            slide->current_indent_level = indent_level;
+        } else if(slide->current_indent_level > indent_level) {
+            //fprintf(stderr, "Indent OUT to %d\n", indent_level);
+            auto parent = slide->content_cur->parent;
+            slide->content_cur = parent;
+            parent->next = (present_list_node*)node;
+            slide->current_indent_level = indent_level;
+        } else {
+            //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
+            slide->content_cur->next = (present_list_node*)node;
+            node->hdr.parent = slide->content_cur->parent;
+            slide->content_cur = (present_list_node*)node;
+        }
+    } else {
+        //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
+        slide->content = slide->content_cur = (present_list_node*)node;
+        slide->current_indent_level = indent_level;
+    }
+    //fprintf(stderr, "Appended image '%.*s'\n", path_len, path);
+}
+
+static void set_subtitle(present_file* file, parse_state* state, const char* title, unsigned title_len) {
+    assert(file && state && title);
+    auto slide = state->last;
+    if(!slide) {
+        fprintf(stderr, "No #SLIDE directive before #SUBTITLE!\n");
+    }
+    assert(slide);
+    slide->subtitle_len = title_len;
+    char* buf = (char*)arena_alloc(file->mem, title_len);
+    memcpy(buf, title, title_len);
+    slide->subtitle = buf;
+}
+
+static void append_to_list(present_file* file, parse_state* state, int indent_level, const char* line, unsigned linelen) {
+    auto slide = state->last;
+    if(!slide) {
+        fprintf(stderr, "No #SLIDE directive before content!\n");
+    }
+    assert(slide);
+    auto node = (list_node_text*)arena_alloc(file->mem, sizeof(list_node_text));
+    node->hdr.type = LNODE_TEXT;
+    node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
+    node->text_length = linelen;
+    char* buf = (char*)arena_alloc(file->mem, linelen);
+    memcpy(buf, line, linelen);
+    node->text = buf;
+
+    if(slide->content_cur) {
+        if(slide->current_indent_level < indent_level) {
+            //fprintf(stderr, "Indent IN to %d\n", indent_level);
+            node->hdr.parent = slide->content_cur;
+            slide->content_cur->children = (present_list_node*)node;
+            slide->content_cur = (present_list_node*) node;
+            slide->current_indent_level = indent_level;
+        } else if(slide->current_indent_level > indent_level) {
+            //fprintf(stderr, "Indent OUT to %d\n", indent_level);
+            auto parent = slide->content_cur->parent;
+            slide->content_cur = parent;
+            parent->next = (present_list_node*)node;
+            slide->current_indent_level = indent_level;
+        } else {
+            //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
+            slide->content_cur->next = (present_list_node*)node;
+            node->hdr.parent = slide->content_cur->parent;
+            slide->content_cur = (present_list_node*)node;
+        }
+    } else {
+        //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
+        slide->content = slide->content_cur = (present_list_node*)node;
+        slide->current_indent_level = indent_level;
+    }
+
+    //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
+}
+
 static bool parse_file(present_file* file, FILE* f) {
     bool ret = true;
     unsigned line_length;
@@ -137,6 +379,9 @@ static bool parse_file(present_file* file, FILE* f) {
 
     const char* directive;
     unsigned directive_len;
+    const char* directive_arg;
+    unsigned directive_arg_len;
+    parse_state pstate;
 
     assert(file && f);
 
@@ -148,11 +393,37 @@ static bool parse_file(present_file* file, FILE* f) {
                 line_length = read_line(line_buf, line_siz, &indent_level, f);
                 if(line_length) {
                     if(is_directive(&directive, &directive_len, line_buf, line_length)) {
+                        // Calculate directive argument ptr and len
+                        directive_arg = directive + directive_len + 1;
+                        directive_arg_len = line_length - directive_len - 1;
+                        if(directive_arg_len != 0) {
+                            directive_arg_len--;
+                        }
+
+                        if(strncmp(directive, "SLIDE", directive_len) == 0) {
+                            append_slide(file, &pstate);
+                        } else if(strncmp(directive, "SUBTITLE", directive_len) == 0) {
+                            set_subtitle(file, &pstate, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "INLINE_IMAGE", directive_len) == 0) {
+                            add_inline_image(file, &pstate, indent_level, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "CHAPTER", directive_len) == 0) {
+                            set_chapter_title(file, &pstate, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "TITLE", directive_len) == 0) {
+                            set_title(file, &pstate, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "AUTHORS", directive_len) == 0) {
+                            set_authors(file, &pstate, directive_arg, directive_arg_len);
+                        } else {
+                            fprintf(stderr, "Warning: unknown directive: '%.*s'\n",
+                                    directive_len, directive);
+                        }
+                    } else {
+                        append_to_list(file, &pstate, indent_level, line_buf, line_length);
                     }
                 }
             }
         } else {
             fprintf(stderr, "#PRESENT header is missing from presentation file!\n");
+            ret = false;
         }
     }
 
@@ -169,6 +440,7 @@ present_file* present_open(const char* filename) {
         if(f) {
             ret = (present_file*)malloc(sizeof(present_file));
             if(ret) {
+                ret->path = filename;
                 ret->mem = arena_create(PF_MEM_SIZE);
                 ret->title = NULL;
                 ret->authors = NULL;
