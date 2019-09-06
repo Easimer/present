@@ -570,17 +570,17 @@ static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq
             cmd->height = img->height;
             cmd->buffer = img->buffer;
             assert(img->buffer);
-            y += img->width + 16;
+            y += img->height;
         }
         if(cur->children) {
-            x += 8;
+            x += 24;
             cur = cur->children;
         } else {
         }
         if(cur->next) {
             cur = cur->next;
         } else {
-            x -= 8;
+            x -= 24;
             if(cur->parent) {
                 cur = cur->parent->next;
             } else {

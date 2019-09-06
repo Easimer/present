@@ -20,7 +20,7 @@
 #include "render_queue.h"
 #include "arena.h"
 
-#define RQ_ARENA_SIZE (16 * 1024) // 4KiB
+#define RQ_ARENA_SIZE (16 * 1024) // 16KiB
 
 render_queue* rq_alloc() {
     render_queue* ret = NULL;
