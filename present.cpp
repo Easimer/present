@@ -56,6 +56,7 @@ struct list_node_image {
 };
 
 struct present_slide {
+    int chapter_title_len;
     const char* chapter_title; // optional
     int subtitle_len;
     const char* subtitle; // optional
@@ -85,6 +86,7 @@ struct parse_state {
     present_slide* first;
     present_slide* last;
 
+    int current_chapter_title_len;
     const char* current_chapter_title;
 };
 
@@ -153,6 +155,7 @@ static void append_slide(present_file* file, parse_state* state) {
     assert(file && state);
     present_slide* next_slide = (present_slide*)arena_alloc(file->mem, sizeof(present_slide));
     next_slide->chapter_title = state->current_chapter_title;
+    next_slide->chapter_title_len = state->current_chapter_title_len;
     next_slide->subtitle = NULL;
     next_slide->next = NULL;
     //fprintf(stderr, "=== SLIDE ===\n");
@@ -171,10 +174,10 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
     if(title_len == 0) {
         state->current_chapter_title = NULL;
     } else {
-        char* buf = (char*)arena_alloc(file->mem, title_len + 1);
+        char* buf = (char*)arena_alloc(file->mem, title_len);
         memcpy(buf, title, title_len);
-        buf[title_len] = 0;
         state->current_chapter_title = buf;
+        state->current_chapter_title_len = title_len;
     }
 }
 
@@ -548,12 +551,28 @@ static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
 
 static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq) {
     int x = 8;
-    int y = 54;
+    int y = 96;
+    rq_draw_text* cmd = NULL;
 
     present_list_node* cur = slide->content;
+
+    if(slide->chapter_title) {
+        cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        cmd->x = 10; cmd->y = 32;
+        cmd->size = 32;
+        cmd->text_len = slide->chapter_title_len;
+        cmd->text = slide->chapter_title;
+    }
+    if(slide->subtitle) {
+        cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        cmd->x = 10; cmd->y = 64;
+        cmd->size = 32;
+        cmd->text_len = slide->subtitle_len;
+        cmd->text = slide->subtitle;
+    }
+
     while(cur) {
         if(cur->type == LNODE_TEXT) {
-            rq_draw_text* cmd = NULL;
             list_node_text* text = (list_node_text*)cur;
             cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = x;
