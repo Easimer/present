@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <assert.h>
 #include "display.h"
 #include "present.h"
 #include "render_queue.h"
@@ -19,9 +21,11 @@ static void render_loop(const char* filename) {
             rq = rq_alloc();
             // Loop until the presentation is over or
             // the user has requested an exit (by pressing ESC)
-            while(present_over(file) && !requested_exit) {
+            while(!present_over(file) && !requested_exit) {
+                fprintf(stderr, "Redraw!\n");
                 // Wait for an event
                 if(display_fetch_event(disp, &ev)) {
+                    fprintf(stderr, "Event!\n");
                     switch(ev) {
                         case DISPEV_PREV:
                             present_seek(file, -1);
@@ -38,9 +42,12 @@ static void render_loop(const char* filename) {
                         case DISPEV_EXIT:
                             requested_exit = true;
                             break;
+                        default:
+                            assert(0);
+                            break;
                     }
                     // Only re-render if something happened
-                    present_fill_render_queue(file, &rq);
+                    present_fill_render_queue(file, rq);
                     // Display render queue
                     display_render_queue(disp, rq);
                     // Clear render queue
