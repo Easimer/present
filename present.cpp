@@ -18,9 +18,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <errno.h>
 #include <assert.h>
-#include <unistd.h>
 #include "present.h"
 #include "arena.h"
 #include "display.h" // display_swap_red_blue_channels
@@ -45,7 +45,7 @@ struct present_list_node {
 
 struct list_node_text {
     present_list_node hdr;
-
+    
     unsigned text_length;
     const char* text;
 };
@@ -62,7 +62,7 @@ struct present_slide {
     int subtitle_len;
     const char* subtitle; // optional
     present_slide* next;
-
+    
     present_list_node* content;
     present_list_node* content_cur;
     int current_indent_level;
@@ -71,7 +71,7 @@ struct present_slide {
 struct present_file {
     const char* path;
     mem_arena* mem;
-
+    
     unsigned title_len;
     const char* title;
     unsigned authors_len;
@@ -86,7 +86,7 @@ struct present_file {
 struct parse_state {
     present_slide* first;
     present_slide* last;
-
+    
     int current_chapter_title_len;
     const char* current_chapter_title;
 };
@@ -96,9 +96,9 @@ static unsigned read_line(char* buf, unsigned bufsiz, unsigned* indent_level, FI
     unsigned i = 0;
     char c = 0;
     assert(buf && bufsiz > 0 && indent_level && f);
-
+    
     memset(buf, 0, bufsiz);
-
+    
     *indent_level = 0;
     fread(&c, 1, 1, f);
     while(c != '\n' && (c == ' ' || c == '\t') && !feof(f)) {
@@ -117,14 +117,14 @@ static unsigned read_line(char* buf, unsigned bufsiz, unsigned* indent_level, FI
             buf[i++] = c;
             fread(&c, 1, 1, f);
         }
-
+        
         // 'Remove' trailing whitespace
         while((buf[i] == ' ' || buf[i] == '\t') && i > 0) {
             i--;
         }
         ret = i;
     }
-
+    
     return ret;
 }
 
@@ -134,9 +134,9 @@ static bool is_directive(const char** dirout, unsigned* dirlen, const char* buf,
     bool ret = false;
     unsigned len;
     const char* dir;
-
+    
     assert(buf && buflen > 0 && dirout && dirlen);
-
+    
     if(buf && buflen > 0) {
         *dirout = NULL;
         *dirlen = 0;
@@ -173,7 +173,7 @@ static void append_slide(present_file* file, parse_state* state) {
 
 static void set_chapter_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
-
+    
     if(title_len == 0) {
         state->current_chapter_title = NULL;
     } else {
@@ -187,7 +187,7 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
 
 static void set_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
-
+    
     char* buf = (char*)arena_alloc(file->mem, title_len + 1);
     memcpy(buf, title, title_len);
     buf[title_len] = 0;
@@ -197,7 +197,7 @@ static void set_title(present_file* file, parse_state* state, const char* title,
 
 static void set_authors(present_file* file, parse_state* state, const char* authors, unsigned authors_len) {
     assert(file && state && authors);
-
+    
     char* buf = (char*)arena_alloc(file->mem, authors_len + 1);
     memcpy(buf, authors, authors_len);
     buf[authors_len] = 0;
@@ -206,13 +206,53 @@ static void set_authors(present_file* file, parse_state* state, const char* auth
     file->authors_len = authors_len;
 }
 
+#if _WIN32
+#define WIN32_MEAN_AND_LEAN
+#include <Windows.h>
+inline int p_chdir(const char* path) {
+    int ret = 0;
+    BOOL res;
+    
+    res = SetCurrentDirectory(path);
+    
+    if(!res) {
+        ret = -1;
+    }
+    
+    return ret;
+}
+
+inline char* p_getcwd(char* buf, size_t size) {
+    char* ret = NULL;
+    DWORD res;
+    
+    res = GetCurrentDirectory((DWORD)size, buf);
+    
+    if(size >= res) {
+        ret = buf;
+    }
+    
+    return ret;
+}
+#else
+#include <unistd.h>
+inline int p_chdir(const char* path) {
+    return chdir(path);
+}
+
+inline char* p_getcwd(char* buf, size_t size) {
+    return getcwd(buf, size);
+}
+int 
+#endif
+
 static void save_workdir(char** dst) {
     assert(dst);
     char *buf = NULL, *res = NULL;
     int bufsiz = 64;
     while(!buf) {
         buf = (char*)malloc(bufsiz);
-        res = getcwd(buf, bufsiz);
+        res = p_getcwd(buf, bufsiz);
         if(!res) {
             free(buf);
             buf = NULL;
@@ -225,7 +265,7 @@ static void save_workdir(char** dst) {
 static void restore_workdir(char** path) {
     int res;
     assert(path && *path);
-    res = chdir(*path);
+    res = p_chdir(*path);
     *path = NULL;
     if(res) {
         fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
@@ -234,14 +274,14 @@ static void restore_workdir(char** path) {
 
 static void change_to_dir_of_file(const char* path) {
     int res;
-    unsigned len = strlen(path);
+    size_t len = strlen(path);
     char* buf = (char*)malloc(len + 1);
     memcpy(buf, path, len + 1);
-    unsigned i = len;
+    size_t i = len;
     while(buf[--i] != '/' && i > 0);
     if(i != 0) {
         buf[++i] = 0;
-        res = chdir(buf);
+        res = p_chdir(buf);
         buf[i] = '/';
         if(res) {
             fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
@@ -276,10 +316,10 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     node = (list_node_image*)arena_alloc(file->mem, sizeof(list_node_image));
     node->hdr.type = LNODE_IMAGE;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
-
+    
     save_workdir(&prev_workdir);
     change_to_dir_of_file(file->path);
-
+    
     // Copy path to a temp buf and make it zero
     // terminated because stbi wants it that way :(
     //arena_push_frame(file->mem);
@@ -287,16 +327,16 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     temp_path = (char*)malloc(path_len + 1);
     memcpy(temp_path, path, path_len);
     temp_path[path_len] = 0;
-
+    
     // Load pixel data
     pixbuf = stbi_load(temp_path, &x, &y, &channels, STBI_rgb_alpha);
-
+    
     free(temp_path);
     temp_path = NULL;
     //arena_pop_frame(file->mem);
-
+    
     restore_workdir(&prev_workdir);
-
+    
     if(pixbuf) {
         unsigned pixbuf_siz = sizeof(stbi_uc) * x * y * 4;
         pixbuf_final = (stbi_uc*)arena_alloc(file->mem, pixbuf_siz);
@@ -310,11 +350,11 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
         fprintf(stderr, "Failed to load image '%.*s': %s!\n", path_len, path, stbi_failure_reason());
     }
     assert(pixbuf_final);
-
+    
     node->width = x;
     node->height = y;
     node->buffer = pixbuf_final;
-
+    
     if(slide->content_cur) {
         if(slide->current_indent_level < indent_level) {
             //fprintf(stderr, "Indent IN to %d from %d\n", indent_level, slide->current_indent_level);
@@ -370,7 +410,7 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
     memcpy(buf, line, linelen);
     buf[linelen] = 0;
     node->text = buf;
-
+    
     if(slide->content_cur) {
         if(slide->current_indent_level < indent_level) {
             //fprintf(stderr, "Indent IN to %d\n", indent_level);
@@ -395,7 +435,7 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
         slide->content = slide->content_cur = (present_list_node*)node;
         slide->current_indent_level = indent_level;
     }
-
+    
     //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
 }
 
@@ -405,17 +445,17 @@ static bool parse_file(present_file* file, FILE* f) {
     char line_buf[512];
     const unsigned line_siz = 512;
     unsigned indent_level;
-
+    
     const char* directive;
     unsigned directive_len;
     const char* directive_arg;
     unsigned directive_arg_len;
     parse_state pstate;
-
+    
     pstate.first = pstate.last = NULL;
-
+    
     assert(file && f);
-
+    
     // First line must be a '#PRESENT'
     line_length = read_line(line_buf, line_siz, &indent_level, f);
     if(line_length && is_directive(&directive, &directive_len, line_buf, line_length)) {
@@ -430,7 +470,7 @@ static bool parse_file(present_file* file, FILE* f) {
                         if(directive_arg_len != 0) {
                             directive_arg_len--;
                         }
-
+                        
                         if(strncmp(directive, "SLIDE", directive_len) == 0) {
                             append_slide(file, &pstate);
                         } else if(strncmp(directive, "SUBTITLE", directive_len) == 0) {
@@ -458,14 +498,14 @@ static bool parse_file(present_file* file, FILE* f) {
             ret = false;
         }
     }
-
+    
     return ret;
 }
 
 present_file* present_open(const char* filename) {
     present_file* ret = NULL;
     FILE* f = NULL;
-
+    
     assert(filename);
     if(filename) {
         f = fopen(filename, "r");
@@ -483,7 +523,7 @@ present_file* present_open(const char* filename) {
                     arena_destroy(ret->mem);
                     free(ret);
                     ret = NULL;
-
+                    
                     fprintf(stderr, "Presentation parse error!\n");
                 }
             }
@@ -492,7 +532,7 @@ present_file* present_open(const char* filename) {
             fprintf(stderr, "Failed to open presentation file '%s'!\n", filename);
         }
     }
-
+    
     return ret;
 }
 
@@ -530,7 +570,7 @@ int present_seek_to(present_file* file, int abs) {
         if(abs == -1) {
             abs = file->slide_count - 1;
         }
-
+        
         fprintf(stderr, "Jumping to slide %d/%d\n", abs, file->slide_count);
         if(abs < 0) {
             abs = 0;
@@ -558,9 +598,9 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
         title->size = VIRTUAL_Y(72);
         title->text_len = file->title_len;
         title->text = file->title;
-        RGB(title, 0, 0, 0); title->a = 1;
+        SET_RGB(title, 0, 0, 0); title->a = 1;
     }
-
+    
     if(file->authors_len && file->authors) {
         auto authors = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
         authors->x = VIRTUAL_X(36);
@@ -568,7 +608,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
         authors->size = VIRTUAL_Y(20);
         authors->text_len = file->authors_len;
         authors->text = file->authors;
-        RGB(authors, 21, 21, 21); authors->a = 1;
+        SET_RGB(authors, 21, 21, 21); authors->a = 1;
     }
 }
 
@@ -582,12 +622,11 @@ static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
 }
 
 static void process_list_element(present_file* file, present_list_node* node, render_queue* rq,
-        int& x, int& y) {
-    rq_draw_text* cmd = NULL;
-    rq_draw_rect* rect = NULL;
+                                 int& x, int& y) {
     auto cur = node;
     while(cur) {
         if(cur->type == LNODE_TEXT) {
+            rq_draw_text* cmd = NULL;
             list_node_text* text = (list_node_text*)cur;
             cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = VIRTUAL_X(x);
@@ -595,7 +634,7 @@ static void process_list_element(present_file* file, present_list_node* node, re
             cmd->size = VIRTUAL_Y(32);
             cmd->text_len = text->text_length;
             cmd->text = text->text;
-            RGB(cmd, 0, 0, 0); cmd->a = 1;
+            SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
             y += 40;
             fprintf(stderr, "%.*s\n", cmd->text_len, cmd->text);
         } else if(cur->type == LNODE_IMAGE) {
@@ -626,22 +665,20 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     int y = 160;
     rq_draw_text* cmd = NULL;
     rq_draw_rect* rect = NULL;
-
-    present_list_node* cur = slide->content;
-
+    
     if(slide->chapter_title) {
         rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
         rect->x0 = 0; rect->y0 = 0;
         rect->x1 = 1; rect->y1 = VIRTUAL_Y(72);
-        RGB(rect, 43, 203, 186); rect->a = 1;
-
+        SET_RGB(rect, 43, 203, 186); rect->a = 1;
+        
         cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10);
         cmd->y = VIRTUAL_Y(64);
         cmd->size = VIRTUAL_Y(64);
         cmd->text_len = slide->chapter_title_len;
         cmd->text = slide->chapter_title;
-        RGB(cmd, 255, 255, 255); cmd->a = 1;
+        SET_RGB(cmd, 255, 255, 255); cmd->a = 1;
     }
     if(slide->subtitle) {
         cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
@@ -649,11 +686,11 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->size = VIRTUAL_Y(44);
         cmd->text_len = slide->subtitle_len;
         cmd->text = slide->subtitle;
-        RGB(cmd, 0, 0, 0); cmd->a = 1;
+        SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
     }
-
+    
     process_list_element(file, slide->content, rq, x, y);
-
+    
     cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
     int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
     cmd->text = (char*)arena_alloc(rq->mem, slide_num_len + 1);
@@ -662,7 +699,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     cmd->x = VIRTUAL_X(4);
     cmd->y = VIRTUAL_Y(720 - 24);
     cmd->size = VIRTUAL_Y(24);
-    RGB(cmd, 0, 0, 0);
+    SET_RGB(cmd, 0, 0, 0);
 }
 
 void present_fill_render_queue(present_file* file, render_queue* rq) {

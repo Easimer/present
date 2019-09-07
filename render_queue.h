@@ -54,7 +54,7 @@ struct rq_draw_rect {
 
 struct render_queue {
     mem_arena* mem;
-
+    
     rq_draw_cmd* commands;
     rq_draw_cmd* last;
 };
@@ -68,18 +68,18 @@ void* rq_new_cmd(render_queue* rq, unsigned size);
 template<typename T>
 inline T* rq_new_cmd(render_queue* rq, rq_cmd cmd = RQCMD_INVALID) {
     T* ret = (T*)rq_new_cmd(rq, sizeof(T));
-
+    
     ret->hdr.cmd = cmd;
     ret->hdr.next = NULL;
-
+    
     return ret;
 }
 #endif
 
 #define VIRTUAL_X(val) ((val) / 1280.0f)
 #define VIRTUAL_Y(val) ((val) / 720.0f)
-#define RGB(aggr, R, G, B)  \
-    aggr->r = (R) / 255.0f; \
-    aggr->g = (G) / 255.0f; \
-    aggr->b = (B) / 255.0f; \
-    aggr->a = 1;
+#define SET_RGB(aggr, R, G, B)  \
+aggr->r = (R) / 255.0f; \
+aggr->g = (G) / 255.0f; \
+aggr->b = (B) / 255.0f; \
+aggr->a = 1;

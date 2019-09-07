@@ -2,3 +2,8 @@ data/
 *.o
 present
 *.swp
+
+*.exe
+*.pdb
+*.obj
+vc*.pdb
