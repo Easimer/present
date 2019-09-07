@@ -1,5 +1,5 @@
-CFLAGS_X11=$(shell pkg-config x11-xcb xcb-image xcb-util cairo --cflags)
-LDFLAGS_X11=$(shell pkg-config x11-xcb xcb-image xcb-util cairo --libs)
+CFLAGS_X11=$(shell pkg-config x11-xcb xcb-image xcb-util cairo xcb-ewmh --cflags)
+LDFLAGS_X11=$(shell pkg-config x11-xcb xcb-image xcb-util cairo xcb-ewmh --libs)
 
 CXXFLAGS=$(CFLAGS_X11) -Wall -g -O0
 LDFLAGS=$(LDFLAGS_X11)

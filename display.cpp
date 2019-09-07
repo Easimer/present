@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_image.h>
+#include <xcb/xcb_ewmh.h>
 #include <cairo.h>
 #include <cairo-xcb.h>
 #include "display.h"
@@ -101,6 +102,14 @@ display* display_open() {
         values[2] = font;
         xcb_create_gc(conn, fontgc, wnd, mask, values);
         xcb_close_font(conn, font);
+
+        // send fullscreen hint
+        xcb_ewmh_connection_t EWMH;
+        xcb_intern_atom_cookie_t* cookie = xcb_ewmh_init_atoms(conn, &EWMH);
+        if(xcb_ewmh_init_atoms_replies(&EWMH, cookie, NULL)) {
+            xcb_change_property(conn, XCB_PROP_MODE_REPLACE, wnd,
+                    EWMH._NET_WM_STATE, XCB_ATOM_ATOM, 32, 1, &(EWMH._NET_WM_STATE_FULLSCREEN));
+        }
 
         ret->conn = conn;
         ret->wnd = wnd;
