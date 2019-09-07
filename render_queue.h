@@ -32,15 +32,16 @@ struct rq_draw_cmd {
 
 struct rq_draw_text {
     rq_draw_cmd hdr;
-    int x, y;
-    int size;
+    float x, y; // text position [0,1] normalized
+    float size; // text height in percentage of screen height
     int text_len;
     const char* text;
+    float r, g, b, a;
 };
 
 struct rq_draw_image {
     rq_draw_cmd hdr;
-    int x, y;
+    float x, y;
     int width, height;
     void* buffer; // R8B8G8 format
 };
@@ -48,6 +49,7 @@ struct rq_draw_image {
 struct rq_draw_rect {
     rq_draw_cmd hdr;
     float x0, y0, x1, y1; // [0, 1] normalized ss coords
+    float r, g, b, a;
 };
 
 struct render_queue {
@@ -73,3 +75,11 @@ inline T* rq_new_cmd(render_queue* rq, rq_cmd cmd = RQCMD_INVALID) {
     return ret;
 }
 #endif
+
+#define VIRTUAL_X(val) ((val) / 1280.0f)
+#define VIRTUAL_Y(val) ((val) / 720.0f)
+#define RGB(aggr, R, G, B)  \
+    aggr->r = (R) / 255.0f; \
+    aggr->g = (G) / 255.0f; \
+    aggr->b = (B) / 255.0f; \
+    aggr->a = 1;

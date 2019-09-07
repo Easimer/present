@@ -537,20 +537,22 @@ int present_seek_to(present_file* file, int abs) {
 static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
     if(file->title_len && file->title) {
         auto title = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
-        title->x = 10;
-        title->y = 32;
-        title->size = 20;
+        title->x = VIRTUAL_X(24);
+        title->y = VIRTUAL_Y((720 - 72) / 2);
+        title->size = VIRTUAL_Y(72);
         title->text_len = file->title_len;
         title->text = file->title;
+        RGB(title, 0, 0, 0); title->a = 1;
     }
 
     if(file->authors_len && file->authors) {
         auto authors = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
-        authors->x = 14;
-        authors->y = 52;
-        authors->size = 20;
+        authors->x = VIRTUAL_X(36);
+        authors->y = VIRTUAL_Y(0);
+        authors->size = VIRTUAL_Y(20);
         authors->text_len = file->authors_len;
         authors->text = file->authors;
+        RGB(authors, 21, 21, 21); authors->a = 1;
     }
 }
 
@@ -559,40 +561,52 @@ static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
     auto rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
     rect->x0 = rect->y0 = 0;
     rect->x1 = rect->y1 = 1;
+    rect->r = rect->g = rect->b = 0;
+    rect->a = 1;
 }
 
-static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq) {
+static void present_fill_rq_regular_slide(present_file* file, present_slide* slide, render_queue* rq) {
     int x = 8;
-    int y = 96;
+    int y = 160;
     rq_draw_text* cmd = NULL;
+    rq_draw_rect* rect = NULL;
 
     present_list_node* cur = slide->content;
 
     if(slide->chapter_title) {
+        rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
+        rect->x0 = 0; rect->y0 = 0;
+        rect->x1 = 1; rect->y1 = VIRTUAL_Y(72);
+        RGB(rect, 43, 203, 186); rect->a = 1;
+
         cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
-        cmd->x = 10; cmd->y = 32;
-        cmd->size = 32;
+        cmd->x = VIRTUAL_X(10);
+        cmd->y = VIRTUAL_Y(64);
+        cmd->size = VIRTUAL_Y(64);
         cmd->text_len = slide->chapter_title_len;
         cmd->text = slide->chapter_title;
+        RGB(cmd, 255, 255, 255); cmd->a = 1;
     }
     if(slide->subtitle) {
         cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
-        cmd->x = 10; cmd->y = 64;
-        cmd->size = 32;
+        cmd->x = VIRTUAL_X(10); cmd->y = VIRTUAL_Y(120);
+        cmd->size = VIRTUAL_Y(44);
         cmd->text_len = slide->subtitle_len;
         cmd->text = slide->subtitle;
+        RGB(cmd, 0, 0, 0); cmd->a = 1;
     }
 
     while(cur) {
         if(cur->type == LNODE_TEXT) {
             list_node_text* text = (list_node_text*)cur;
             cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
-            cmd->x = x;
-            cmd->y = y;
-            cmd->size = 20;
+            cmd->x = VIRTUAL_X(x);
+            cmd->y = VIRTUAL_Y(y);
+            cmd->size = VIRTUAL_Y(32);
             cmd->text_len = text->text_length;
             cmd->text = text->text;
-            y += 22;
+            RGB(cmd, 0, 0, 0); cmd->a = 1;
+            y += 40;
         } else if(cur->type == LNODE_IMAGE) {
             rq_draw_image* cmd = NULL;
             list_node_image* img = (list_node_image*)cur;
@@ -600,6 +614,9 @@ static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq
             cmd->width = img->width;
             cmd->height = img->height;
             cmd->buffer = img->buffer;
+            //cmd->x = VIRTUAL_X(x);
+            cmd->x = 0;
+            cmd->y = VIRTUAL_Y(y);
             assert(img->buffer);
             y += img->height;
         }
@@ -619,6 +636,16 @@ static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq
             }
         }
     }
+
+    cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+    int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
+    cmd->text = (char*)arena_alloc(rq->mem, slide_num_len + 1);
+    cmd->text_len = slide_num_len;
+    snprintf((char*)cmd->text, cmd->text_len + 1, "%d / %d", file->current_slide, file->slide_count);
+    cmd->x = VIRTUAL_X(4);
+    cmd->y = VIRTUAL_Y(720 - 24);
+    cmd->size = VIRTUAL_Y(24);
+    RGB(cmd, 0, 0, 0);
 }
 
 void present_fill_render_queue(present_file* file, render_queue* rq) {
@@ -630,7 +657,7 @@ void present_fill_render_queue(present_file* file, render_queue* rq) {
             present_fill_rq_end_slide(file, rq);
         } else {
             auto slide = file->current_slide_data;
-            present_fill_rq_regular_slide(slide, rq);
+            present_fill_rq_regular_slide(file, slide, rq);
         }
     }
 }

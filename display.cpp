@@ -28,7 +28,6 @@ struct display {
     xcb_screen_t* scr;
     xcb_drawable_t wnd;
     xcb_gcontext_t ctx; // black
-    xcb_gcontext_t ctx_white;
     xcb_gcontext_t fontgc;
     uint16_t s_width, s_height;
 
@@ -74,8 +73,6 @@ display* display_open() {
         values[0] = scr->black_pixel;
         xcb_create_gc(conn, fg, wnd, mask, values);
         values[0] = scr->white_pixel;
-        ret->ctx_white = xcb_generate_id(conn);
-        xcb_create_gc(conn, ret->ctx_white, wnd, mask, values);
 
         wnd = xcb_generate_id(conn);
         mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
@@ -114,7 +111,6 @@ display* display_open() {
         ret->s_height = 720;
 
         ret->surf = cairo_xcb_surface_create(conn, wnd, visual, ret->s_width, ret->s_height);
-        //ret->surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, ret->s_width, ret->s_height);
         ret->cr = cairo_create(ret->surf);
     }
 
@@ -199,27 +195,10 @@ bool display_fetch_event(display* disp, display_event* out) {
     return ret;
 }
 
-static xcb_format_t* find_format(xcb_connection_t * c, uint8_t depth, uint8_t bpp)
-{
-    const xcb_setup_t *setup = xcb_get_setup(c);
-    xcb_format_t *fmt = xcb_setup_pixmap_formats(setup);
-    xcb_format_t *fmtend = fmt + xcb_setup_pixmap_formats_length(setup);
-    for(; fmt != fmtend; ++fmt)
-        if((fmt->depth == depth) && (fmt->bits_per_pixel == bpp)) {
-            return fmt;
-        }
-    return 0;
-}
-
 void display_render_queue(display* disp, render_queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
         rq_draw_cmd* cur = rq->commands;
-
-        //xcb_poly_fill_rectangle(disp->conn, disp->wnd, disp->ctx_white, 1, &rectangle);
-
-        xcb_format_t* fmt = find_format(disp->conn, 24, 32);
-        const xcb_setup_t *setup = xcb_get_setup(disp->conn);
 
         // clear backbuf
         cairo_set_source_rgb(disp->cr, 1, 1, 1);
@@ -233,26 +212,25 @@ void display_render_queue(display* disp, render_queue* rq) {
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
                     rq_draw_text* dtxt = (rq_draw_text*)cur;
-                    /*
-                    xcb_image_text_8(disp->conn, dtxt->text_len, disp->wnd, disp->fontgc,
-                            dtxt->x, dtxt->y,
-                            dtxt->text);
-                    */
-                    cairo_set_font_size(disp->cr, dtxt->size);
-                    cairo_move_to(disp->cr, dtxt->x, dtxt->y);
+                    cairo_set_font_size(disp->cr, dtxt->size * disp->s_height);
+                    cairo_move_to(disp->cr, dtxt->x * disp->s_width, dtxt->y * disp->s_height);
+                    cairo_set_source_rgba(disp->cr, dtxt->r, dtxt->g, dtxt->b, dtxt->a);
                     cairo_show_text(disp->cr, dtxt->text);
                     break;
                 }
                 case RQCMD_DRAW_IMAGE: {
                     rq_draw_image* dimg = (rq_draw_image*)cur;
-                    xcb_image_t* ximg;
-                    ximg = xcb_image_create(dimg->width, dimg->height,
-                            XCB_IMAGE_FORMAT_Z_PIXMAP, fmt->scanline_pad,
-                            fmt->depth, fmt->bits_per_pixel, 0, (xcb_image_order_t)setup->image_byte_order,
-                            XCB_IMAGE_ORDER_LSB_FIRST, NULL,
-                            dimg->width * dimg->height * 4, (uint8_t*)dimg->buffer);
-                    xcb_image_put(disp->conn, disp->wnd, disp->ctx, ximg, dimg->x, dimg->y, 0);
-                    xcb_image_destroy(ximg);
+                        cairo_surface_t* imgsurf;
+                    cairo_save(disp->cr);
+                    imgsurf = cairo_image_surface_create_for_data(
+                            (unsigned char*)dimg->buffer,
+                            CAIRO_FORMAT_ARGB32,
+                            dimg->width, dimg->height,
+                            dimg->width * 4);
+                    cairo_set_source_surface(disp->cr, imgsurf, dimg->x * disp->s_width, dimg->y * disp->s_height);
+                    cairo_paint(disp->cr);
+                    cairo_surface_destroy(imgsurf);
+                    cairo_restore(disp->cr);
                     break;
                 }
                 case RQCMD_DRAW_RECTANGLE: {
@@ -262,6 +240,7 @@ void display_render_queue(display* disp, render_queue* rq) {
                     y = drect->y0 * disp->s_height;
                     w = drect->x1 * disp->s_width - x;
                     h = drect->y1 * disp->s_height - y;
+                    cairo_set_source_rgba(disp->cr, drect->r, drect->g, drect->b, drect->a);
                     cairo_rectangle(disp->cr, x, y, w, h);
                     cairo_fill(disp->cr);
                     break;
