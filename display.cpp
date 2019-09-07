@@ -19,6 +19,8 @@
 #include <assert.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_image.h>
+#include <cairo.h>
+#include <cairo-xcb.h>
 #include "display.h"
 
 struct display {
@@ -29,7 +31,27 @@ struct display {
     xcb_gcontext_t ctx_white;
     xcb_gcontext_t fontgc;
     uint16_t s_width, s_height;
+
+    cairo_surface_t* surf;
+    cairo_t* cr;
 };
+
+static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
+{
+    xcb_screen_iterator_t screen_iter = xcb_setup_roots_iterator(xcb_get_setup(c));
+
+    for (; screen_iter.rem; xcb_screen_next(&screen_iter)) {
+        xcb_depth_iterator_t depth_iter = xcb_screen_allowed_depths_iterator(screen_iter.data);
+        for (; depth_iter.rem; xcb_depth_next(&depth_iter)) {
+            xcb_visualtype_iterator_t visual_iter = xcb_depth_visuals_iterator(depth_iter.data);
+            for (; visual_iter.rem; xcb_visualtype_next(&visual_iter))
+                if (visual == visual_iter.data->visual_id)
+                    return visual_iter.data;
+        }
+    }
+
+    return NULL;
+}
 
 display* display_open() {
     const char* font_name = "-misc-fixed-*-*-*-*-20-*-*-*-*-*-iso8859-2";
@@ -40,6 +62,7 @@ display* display_open() {
     xcb_drawable_t wnd;
     xcb_gcontext_t fg, fontgc;
     xcb_font_t font;
+    xcb_visualtype_t* visual;
     unsigned int mask = XCB_GC_FOREGROUND | XCB_GC_GRAPHICS_EXPOSURES;
 
     ret = (display*)malloc(sizeof(display));
@@ -57,7 +80,8 @@ display* display_open() {
         wnd = xcb_generate_id(conn);
         mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
         values[0] = scr->white_pixel;
-        values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_RELEASE;
+        values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_RELEASE |
+            XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
         xcb_create_window(conn, XCB_COPY_FROM_PARENT, wnd, scr->root,
                 0, 0, 1280, 720, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
@@ -67,6 +91,8 @@ display* display_open() {
         // https://vincentsanders.blogspot.com/2010/04/xcb-programming-is-hard.html
         xcb_map_window(conn, wnd);
         xcb_flush(conn);
+
+        visual = find_visual(conn, scr->root_visual);
 
         // load a font
         font = xcb_generate_id(conn);
@@ -86,6 +112,10 @@ display* display_open() {
         ret->fontgc = fontgc;
         ret->s_width = 1280;
         ret->s_height = 720;
+
+        ret->surf = cairo_xcb_surface_create(conn, wnd, visual, ret->s_width, ret->s_height);
+        //ret->surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, ret->s_width, ret->s_height);
+        ret->cr = cairo_create(ret->surf);
     }
 
     return ret;
@@ -95,6 +125,10 @@ void display_close(display* disp) {
     assert(disp);
     if(disp) {
         if(disp->conn) {
+            cairo_destroy(disp->cr);
+            cairo_surface_finish(disp->surf);
+            cairo_surface_destroy(disp->surf);
+
             xcb_disconnect(disp->conn);
         }
         free(disp);
@@ -109,6 +143,11 @@ bool display_fetch_event(display* disp, display_event* out) {
         e = xcb_wait_for_event(disp->conn);
         if(e) {
             switch(e->response_type & ~0x80) {
+                case XCB_CONFIGURE_NOTIFY: {
+                    xcb_configure_notify_event_t* ev = (xcb_configure_notify_event_t*)e;
+                    cairo_xcb_surface_set_size(disp->surf, ev->width, ev->height);
+                    break;
+                }
                 case XCB_EXPOSE:
                     *out = DISPEV_NONE; // force redraw
                     ret = true;
@@ -176,18 +215,30 @@ void display_render_queue(display* disp, render_queue* rq) {
         xcb_rectangle_t rectangle = { 0, 0, disp->s_width, disp->s_height};
         rq_draw_cmd* cur = rq->commands;
 
-        xcb_poly_fill_rectangle(disp->conn, disp->wnd, disp->ctx_white, 1, &rectangle);
+        //xcb_poly_fill_rectangle(disp->conn, disp->wnd, disp->ctx_white, 1, &rectangle);
 
         xcb_format_t* fmt = find_format(disp->conn, 24, 32);
         const xcb_setup_t *setup = xcb_get_setup(disp->conn);
+
+        // clear backbuf
+        cairo_set_source_rgb(disp->cr, 1, 1, 1);
+        cairo_paint(disp->cr);
+
+        // setup text drawing
+        cairo_select_font_face(disp->cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+        cairo_set_source_rgb(disp->cr, 0, 0, 0);
 
         while(cur) {
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
                     rq_draw_text* dtxt = (rq_draw_text*)cur;
+                    /*
                     xcb_image_text_8(disp->conn, dtxt->text_len, disp->wnd, disp->fontgc,
                             dtxt->x, dtxt->y,
                             dtxt->text);
+                    */
+                    cairo_move_to(disp->cr, dtxt->x, dtxt->y);
+                    cairo_show_text(disp->cr, dtxt->text);
                     break;
                 }
                 case RQCMD_DRAW_IMAGE: {
@@ -211,6 +262,7 @@ void display_render_queue(display* disp, render_queue* rq) {
             }
             cur = cur->next;
         }
+        cairo_surface_flush(disp->surf);
         xcb_flush(disp->conn);
     }
 }

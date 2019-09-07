@@ -96,6 +96,8 @@ static unsigned read_line(char* buf, unsigned bufsiz, unsigned* indent_level, FI
     char c = 0;
     assert(buf && bufsiz > 0 && indent_level && f);
 
+    memset(buf, 0, bufsiz);
+
     *indent_level = 0;
     fread(&c, 1, 1, f);
     while(c != '\n' && (c == ' ' || c == '\t') && !feof(f)) {
@@ -174,8 +176,9 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
     if(title_len == 0) {
         state->current_chapter_title = NULL;
     } else {
-        char* buf = (char*)arena_alloc(file->mem, title_len);
+        char* buf = (char*)arena_alloc(file->mem, title_len + 1);
         memcpy(buf, title, title_len);
+        buf[title_len] = 0;
         state->current_chapter_title = buf;
         state->current_chapter_title_len = title_len;
     }
@@ -184,8 +187,9 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
 static void set_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
 
-    char* buf = (char*)arena_alloc(file->mem, title_len);
+    char* buf = (char*)arena_alloc(file->mem, title_len + 1);
     memcpy(buf, title, title_len);
+    buf[title_len] = 0;
     file->title = buf;
     file->title_len = title_len;
 }
@@ -193,8 +197,10 @@ static void set_title(present_file* file, parse_state* state, const char* title,
 static void set_authors(present_file* file, parse_state* state, const char* authors, unsigned authors_len) {
     assert(file && state && authors);
 
-    char* buf = (char*)arena_alloc(file->mem, authors_len);
+    char* buf = (char*)arena_alloc(file->mem, authors_len + 1);
     memcpy(buf, authors, authors_len);
+    buf[authors_len] = 0;
+    
     file->authors = buf;
     file->authors_len = authors_len;
 }
@@ -328,8 +334,9 @@ static void set_subtitle(present_file* file, parse_state* state, const char* tit
     }
     assert(slide);
     slide->subtitle_len = title_len;
-    char* buf = (char*)arena_alloc(file->mem, title_len);
+    char* buf = (char*)arena_alloc(file->mem, title_len + 1);
     memcpy(buf, title, title_len);
+    buf[title_len] = 0;
     slide->subtitle = buf;
 }
 
@@ -343,8 +350,9 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
     node->hdr.type = LNODE_TEXT;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->text_length = linelen;
-    char* buf = (char*)arena_alloc(file->mem, linelen);
+    char* buf = (char*)arena_alloc(file->mem, linelen + 1);
     memcpy(buf, line, linelen);
+    buf[linelen] = 0;
     node->text = buf;
 
     if(slide->content_cur) {
@@ -387,6 +395,8 @@ static bool parse_file(present_file* file, FILE* f) {
     const char* directive_arg;
     unsigned directive_arg_len;
     parse_state pstate;
+
+    pstate.first = pstate.last = NULL;
 
     assert(file && f);
 
