@@ -1,0 +1,31 @@
+#PRESENT
+#TITLE Example Presentation
+#AUTHORS Example et al.
+
+#CHAPTER Chapter I.
+
+#SLIDE
+    - List item
+    - List item
+        * Sublist item
+        * Sublist item
+    - List item
+        - Sublist item
+            * Sublist item
+
+#SLIDE
+    #SUBTITLE Subtitle
+    - List item
+    #INLINE_IMAGE Lenna.png
+    - List item
+
+#CHAPTER Chapter II.
+
+#SLIDE
+    - Very long list
+    item
+        - Very long sublist
+        item
+
+#SLIDE
+    #SUBTITLE Penultimate slide

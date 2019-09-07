@@ -548,7 +548,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
     if(file->authors_len && file->authors) {
         auto authors = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
         authors->x = VIRTUAL_X(36);
-        authors->y = VIRTUAL_Y(0);
+        authors->y = VIRTUAL_Y((720 + 20) / 2);
         authors->size = VIRTUAL_Y(20);
         authors->text_len = file->authors_len;
         authors->text = file->authors;
