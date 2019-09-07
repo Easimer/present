@@ -557,6 +557,8 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
 static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
     // a filled rectangle covering the screen
     auto rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
+    rect->x0 = rect->y0 = 0;
+    rect->x1 = rect->y1 = 1;
 }
 
 static void present_fill_rq_regular_slide(present_slide* slide, render_queue* rq) {

@@ -47,6 +47,7 @@ struct rq_draw_image {
 
 struct rq_draw_rect {
     rq_draw_cmd hdr;
+    float x0, y0, x1, y1; // [0, 1] normalized ss coords
 };
 
 struct render_queue {

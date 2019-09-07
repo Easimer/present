@@ -214,7 +214,6 @@ static xcb_format_t* find_format(xcb_connection_t * c, uint8_t depth, uint8_t bp
 void display_render_queue(display* disp, render_queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
-        xcb_rectangle_t rectangle = { 0, 0, disp->s_width, disp->s_height};
         rq_draw_cmd* cur = rq->commands;
 
         //xcb_poly_fill_rectangle(disp->conn, disp->wnd, disp->ctx_white, 1, &rectangle);
@@ -257,7 +256,14 @@ void display_render_queue(display* disp, render_queue* rq) {
                     break;
                 }
                 case RQCMD_DRAW_RECTANGLE: {
-                    xcb_poly_fill_rectangle(disp->conn, disp->wnd, disp->ctx, 1, &rectangle);
+                    rq_draw_rect* drect = (rq_draw_rect*)cur;
+                    int x, y, w, h;
+                    x = drect->x0 * disp->s_width;
+                    y = drect->y0 * disp->s_height;
+                    w = drect->x1 * disp->s_width - x;
+                    h = drect->y1 * disp->s_height - y;
+                    cairo_rectangle(disp->cr, x, y, w, h);
+                    cairo_fill(disp->cr);
                     break;
                 }
                 default:
