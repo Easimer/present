@@ -1,12 +1,22 @@
 #include <stdlib.h>
+#pragma warning(push)
+#pragma warning(disable : 4458)
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <objidl.h>
+#include <gdiplus.h>
+using namespace Gdiplus;
+#pragma warning(pop)
 #include "display.h"
 
 struct display {
     HWND wnd;
     
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken;
+    
     // For WndProc
+    HDC backdc;
     display_event* ev_out;
     bool ev_res;
 };
@@ -46,6 +56,7 @@ struct display* display_open() {
     WNDCLASSA wc = {0};
     
     if(ret) {
+        GdiplusStartup(&ret->gdiplusToken, &ret->gdiplusStartupInput, NULL);
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpszClassName = "PresentWindow";
         wc.hInstance = GetModuleHandle(NULL);
@@ -67,6 +78,7 @@ struct display* display_open() {
 
 void display_close(display* disp) {
     if(disp) {
+        GdiplusShutdown(disp->gdiplusToken);
         DestroyWindow(disp->wnd);
     }
 }
@@ -88,21 +100,20 @@ bool display_fetch_event(display* disp, display_event* out) {
 }
 
 void display_render_queue(display* disp, render_queue* rq) {
-    PAINTSTRUCT ps;
-    RECT r;
+    //PAINTSTRUCT ps;
+    //RECT r;
     HDC hdc;
     
     if(disp && rq) {
-        GetClientRect(disp->wnd, &r);
-        if(r.bottom == 0) {
-            return;
+        hdc = GetDC(disp->wnd);
+        Graphics g(hdc);
+        for(int y = 0; y < 256; y++) {
+            for(int x = 0; x < 256; x++) {
+                SetPixel(hdc, x, y, RGB(255, 0, 0));
+            }
         }
-        
-        hdc = BeginPaint(disp->wnd, &ps);
-        
-        SetPixel(hdc, 0, 0, RGB(255, 0, 0));
-        
-        EndPaint(disp->wnd, &ps);
+        SwapBuffers(hdc);
+        ReleaseDC(disp->wnd, hdc);
     }
 }
 

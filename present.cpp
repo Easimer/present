@@ -636,7 +636,6 @@ static void process_list_element(present_file* file, present_list_node* node, re
             cmd->text = text->text;
             SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
             y += 40;
-            fprintf(stderr, "%.*s\n", cmd->text_len, cmd->text);
         } else if(cur->type == LNODE_IMAGE) {
             rq_draw_image* cmd = NULL;
             list_node_image* img = (list_node_image*)cur;
@@ -652,7 +651,6 @@ static void process_list_element(present_file* file, present_list_node* node, re
         }
         if(cur->children) {
             x += 24;
-            fprintf(stderr, "Enter children\n");
             process_list_element(file, cur->children, rq, x, y);
         }
         cur = cur->next;
