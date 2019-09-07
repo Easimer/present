@@ -146,6 +146,8 @@ bool display_fetch_event(display* disp, display_event* out) {
                 case XCB_CONFIGURE_NOTIFY: {
                     xcb_configure_notify_event_t* ev = (xcb_configure_notify_event_t*)e;
                     cairo_xcb_surface_set_size(disp->surf, ev->width, ev->height);
+                    disp->s_width = ev->width;
+                    disp->s_height = ev->height;
                     break;
                 }
                 case XCB_EXPOSE:
@@ -237,6 +239,7 @@ void display_render_queue(display* disp, render_queue* rq) {
                             dtxt->x, dtxt->y,
                             dtxt->text);
                     */
+                    cairo_set_font_size(disp->cr, dtxt->size);
                     cairo_move_to(disp->cr, dtxt->x, dtxt->y);
                     cairo_show_text(disp->cr, dtxt->text);
                     break;
