@@ -32,3 +32,5 @@ display* display_open();
 void display_close(display*);
 bool display_fetch_event(display*, display_event* out);
 void display_render_queue(display*, render_queue*);
+
+bool display_swap_red_blue_channels();

@@ -263,3 +263,7 @@ void display_render_queue(display* disp, render_queue* rq) {
         xcb_flush(disp->conn);
     }
 }
+
+bool display_swap_red_blue_channels() {
+    return true;
+}

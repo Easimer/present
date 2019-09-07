@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include "present.h"
 #include "arena.h"
+#include "display.h" // display_swap_red_blue_channels
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -248,6 +249,18 @@ static void change_to_dir_of_file(const char* path) {
     }
 }
 
+static void swap_red_blue_channels(uint8_t* rgba_buffer, unsigned width, unsigned height) {
+    for(unsigned y = 0; y < height; y++) {
+        for(unsigned x = 0; x < width; x++) {
+            auto& c0 = rgba_buffer[y * width * 4 + x * 4 + 0];
+            auto& c1 = rgba_buffer[y * width * 4 + x * 4 + 2];
+            uint8_t t = c0;
+            c0 = c1;
+            c1 = t;
+        }
+    }
+}
+
 static void add_inline_image(present_file* file, parse_state* state, int indent_level, const char* path, unsigned path_len) {
     char* prev_workdir = NULL;
     int x, y, channels;
@@ -288,6 +301,9 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
         unsigned pixbuf_siz = sizeof(stbi_uc) * x * y * 4;
         pixbuf_final = (stbi_uc*)arena_alloc(file->mem, pixbuf_siz);
         memcpy(pixbuf_final, pixbuf, pixbuf_siz);
+        if(display_swap_red_blue_channels()) {
+            swap_red_blue_channels((uint8_t*)pixbuf_final, x, y);
+        }
         stbi_image_free(pixbuf);
         pixbuf = NULL;
     } else {
