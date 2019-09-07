@@ -365,8 +365,8 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
         } else if(slide->current_indent_level > indent_level) {
             //fprintf(stderr, "Indent OUT to %d\n", indent_level);
             auto parent = slide->content_cur->parent;
-            slide->content_cur = parent;
             parent->next = (present_list_node*)node;
+            slide->content_cur = (present_list_node*)node;
             slide->current_indent_level = indent_level;
         } else {
             //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
@@ -565,6 +565,46 @@ static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
     rect->a = 1;
 }
 
+static void process_list_element(present_file* file, present_list_node* node, render_queue* rq,
+        int& x, int& y) {
+    rq_draw_text* cmd = NULL;
+    rq_draw_rect* rect = NULL;
+    auto cur = node;
+    while(cur) {
+        if(cur->type == LNODE_TEXT) {
+            list_node_text* text = (list_node_text*)cur;
+            cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+            cmd->x = VIRTUAL_X(x);
+            cmd->y = VIRTUAL_Y(y);
+            cmd->size = VIRTUAL_Y(32);
+            cmd->text_len = text->text_length;
+            cmd->text = text->text;
+            RGB(cmd, 0, 0, 0); cmd->a = 1;
+            y += 40;
+            fprintf(stderr, "%.*s\n", cmd->text_len, cmd->text);
+        } else if(cur->type == LNODE_IMAGE) {
+            rq_draw_image* cmd = NULL;
+            list_node_image* img = (list_node_image*)cur;
+            cmd = rq_new_cmd<rq_draw_image>(rq, RQCMD_DRAW_IMAGE);
+            cmd->width = img->width;
+            cmd->height = img->height;
+            cmd->buffer = img->buffer;
+            //cmd->x = VIRTUAL_X(x);
+            cmd->x = 0;
+            cmd->y = VIRTUAL_Y(y);
+            assert(img->buffer);
+            y += img->height;
+        }
+        if(cur->children) {
+            x += 24;
+            fprintf(stderr, "Enter children\n");
+            process_list_element(file, cur->children, rq, x, y);
+        }
+        cur = cur->next;
+    }
+    x -= 24;
+}
+
 static void present_fill_rq_regular_slide(present_file* file, present_slide* slide, render_queue* rq) {
     int x = 8;
     int y = 160;
@@ -596,46 +636,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         RGB(cmd, 0, 0, 0); cmd->a = 1;
     }
 
-    while(cur) {
-        if(cur->type == LNODE_TEXT) {
-            list_node_text* text = (list_node_text*)cur;
-            cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
-            cmd->x = VIRTUAL_X(x);
-            cmd->y = VIRTUAL_Y(y);
-            cmd->size = VIRTUAL_Y(32);
-            cmd->text_len = text->text_length;
-            cmd->text = text->text;
-            RGB(cmd, 0, 0, 0); cmd->a = 1;
-            y += 40;
-        } else if(cur->type == LNODE_IMAGE) {
-            rq_draw_image* cmd = NULL;
-            list_node_image* img = (list_node_image*)cur;
-            cmd = rq_new_cmd<rq_draw_image>(rq, RQCMD_DRAW_IMAGE);
-            cmd->width = img->width;
-            cmd->height = img->height;
-            cmd->buffer = img->buffer;
-            //cmd->x = VIRTUAL_X(x);
-            cmd->x = 0;
-            cmd->y = VIRTUAL_Y(y);
-            assert(img->buffer);
-            y += img->height;
-        }
-        if(cur->children) {
-            x += 24;
-            cur = cur->children;
-        } else {
-        }
-        if(cur->next) {
-            cur = cur->next;
-        } else {
-            x -= 24;
-            if(cur->parent) {
-                cur = cur->parent->next;
-            } else {
-                cur = NULL;
-            }
-        }
-    }
+    process_list_element(file, slide->content, rq, x, y);
 
     cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
     int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
