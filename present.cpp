@@ -81,6 +81,10 @@ struct present_file {
     int current_slide;
     present_slide* slides;
     present_slide* current_slide_data;
+    
+    const char* font_title; // Font used on the title slide
+    const char* font_chapter; // Font used for chapter title
+    const char* font_general; // Font used for content text and as a fallback
 };
 
 struct parse_state {
@@ -439,6 +443,20 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
     //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
 }
 
+void set_font(present_file* file, const char** dst, const char* name, unsigned name_len) {
+    char* buf;
+    assert(file && dst && name && name_len > 0);
+    if(file && dst && name && name_len > 0) {
+        if(*dst) {
+            fprintf(stderr, "Note: font was set multiple times!\n");
+        }
+        buf = (char*)arena_alloc(file->mem, name_len + 1);
+        memcpy(buf, name, name_len);
+        buf[name_len] = 0;
+        *dst = buf;
+    }
+}
+
 static bool parse_file(present_file* file, FILE* f) {
     bool ret = true;
     unsigned line_length;
@@ -455,6 +473,8 @@ static bool parse_file(present_file* file, FILE* f) {
     pstate.first = pstate.last = NULL;
     
     assert(file && f);
+    
+    file->font_general = file->font_title = file->font_chapter = NULL;
     
     // First line must be a '#PRESENT'
     line_length = read_line(line_buf, line_siz, &indent_level, f);
@@ -483,6 +503,12 @@ static bool parse_file(present_file* file, FILE* f) {
                             set_title(file, &pstate, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "AUTHORS", directive_len) == 0) {
                             set_authors(file, &pstate, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "FONT", directive_len) == 0) {
+                            set_font(file, &file->font_general, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "FONT_TITLE", directive_len) == 0) {
+                            set_font(file, &file->font_title, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "FONT_CHAPTER", directive_len) == 0) {
+                            set_font(file, &file->font_chapter, directive_arg, directive_arg_len);
                         } else {
                             fprintf(stderr, "Warning: unknown directive: '%.*s'\n",
                                     directive_len, directive);
@@ -598,6 +624,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
         title->size = VIRTUAL_Y(72);
         title->text_len = file->title_len;
         title->text = file->title;
+        title->font_name = file->font_title;
         SET_RGB(title, 0, 0, 0); title->a = 1;
     }
     
@@ -608,6 +635,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
         authors->size = VIRTUAL_Y(20);
         authors->text_len = file->authors_len;
         authors->text = file->authors;
+        authors->font_name = file->font_title;
         SET_RGB(authors, 21, 21, 21); authors->a = 1;
     }
 }
@@ -634,6 +662,7 @@ static void process_list_element(present_file* file, present_list_node* node, re
             cmd->size = VIRTUAL_Y(32);
             cmd->text_len = text->text_length;
             cmd->text = text->text;
+            cmd->font_name = file->font_general;
             SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
             y += 40;
         } else if(cur->type == LNODE_IMAGE) {
@@ -676,6 +705,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->size = VIRTUAL_Y(64);
         cmd->text_len = slide->chapter_title_len;
         cmd->text = slide->chapter_title;
+        cmd->font_name = file->font_chapter;
         SET_RGB(cmd, 255, 255, 255); cmd->a = 1;
     }
     if(slide->subtitle) {
@@ -684,6 +714,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->size = VIRTUAL_Y(44);
         cmd->text_len = slide->subtitle_len;
         cmd->text = slide->subtitle;
+        cmd->font_name = file->font_general;
         SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
     }
     

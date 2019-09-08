@@ -37,6 +37,8 @@ struct rq_draw_text {
     int text_len;
     const char* text;
     float r, g, b, a;
+    
+    const char* font_name;
 };
 
 struct rq_draw_image {

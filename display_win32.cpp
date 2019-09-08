@@ -10,6 +10,8 @@ using namespace Gdiplus;
 #pragma warning(pop)
 #include "display.h"
 
+#define WM_JUMPSTART (WM_USER + 0x0000)
+
 struct display {
     HWND wnd;
     
@@ -33,6 +35,7 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
     rq_draw_cmd* cur = rq->commands;
     HFONT fntCurrent = NULL;
     int font_size = 0;
+    const char* font_name = NULL;
     // clear bg
     SelectObject(hDC, disp->penInvis);
     Rectangle(hDC, 0, 0, rClient->right, rClient->bottom);
@@ -52,16 +55,18 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
                 int size = (int)(dtxt->size * disp->s_height);
                 size_t wlen = mbstowcs(text_buffer, dtxt->text, 8192);
                 
-                if(font_size != size) {
+                // NOTE(easimer): dtxt->font_name is kinda unique so it's OK to compare pointers here
+                if(!fntCurrent || (font_size != size && font_name != dtxt->font_name)) {
                     font_size = size;
                     if(fntCurrent) {
                         DeleteObject(fntCurrent);
                     }
+                    const char* ffn = dtxt->font_name ? dtxt->font_name : "Calibri";
                     fntCurrent = CreateFontA(font_size, 0, 0, 0, FW_NORMAL,
                                              FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                              CLEARTYPE_QUALITY, DEFAULT_PITCH,
-                                             "Calibri");
+                                             ffn);
                 }
                 SelectObject(hDC, fntCurrent);
                 SetTextColor(hDC, RGB(r, g, b));
@@ -196,6 +201,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             disp->s_height = HIWORD(lParam);
             break;
         }
+        case WM_JUMPSTART: {
+            if(disp->ev_out) {
+                disp->ev_res = true;
+                *disp->ev_out = DISPEV_NONE; // force redraw
+            }
+            break;
+        }
     }
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }
@@ -231,6 +243,8 @@ struct display* display_open() {
         UpdateWindow(ret->wnd);
         ret->penBlack = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
         ret->penInvis = CreatePen(PS_NULL, 1, RGB(0, 0, 0));
+        
+        PostMessage(ret->wnd, WM_JUMPSTART, 0, 0);
     }
     
     return ret;
