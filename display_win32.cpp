@@ -61,7 +61,7 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
                                              FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                              CLEARTYPE_QUALITY, DEFAULT_PITCH,
-                                             "Times New Roman");
+                                             "Calibri");
                 }
                 SelectObject(hDC, fntCurrent);
                 SetTextColor(hDC, RGB(r, g, b));
@@ -203,6 +203,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 struct display* display_open() {
     display* ret = (display*)malloc(sizeof(display));
     WNDCLASSA wc = {0};
+    int screen_width, screen_height;
     
     if(ret) {
         ret->rq = NULL;
@@ -218,11 +219,14 @@ struct display* display_open() {
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
         RegisterClassA(&wc);
-        ret->s_width = 1280;
-        ret->s_height = 720;
+        screen_width = GetSystemMetrics(SM_CXSCREEN);
+        screen_height = GetSystemMetrics(SM_CYSCREEN);
+        ret->s_width = (float)screen_width;
+        ret->s_height = (float)screen_height;
         ret->wnd = CreateWindowExA(0, "PresentWindow", "Present",
-                                   WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                   0, 0, 1280, 720, NULL, NULL, wc.hInstance, ret);
+                                   WS_POPUP | WS_VISIBLE,
+                                   0, 0, screen_width, screen_height,
+                                   NULL, NULL, wc.hInstance, ret);
         ShowWindow(ret->wnd, SW_SHOW);
         UpdateWindow(ret->wnd);
         ret->penBlack = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
