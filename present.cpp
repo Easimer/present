@@ -247,7 +247,6 @@ inline int p_chdir(const char* path) {
 inline char* p_getcwd(char* buf, size_t size) {
     return getcwd(buf, size);
 }
-int 
 #endif
 
 static void save_workdir(char** dst) {
