@@ -35,10 +35,16 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
     SelectObject(hDC, disp->penInvis);
     Rectangle(hDC, 0, 0, rClient->right, rClient->bottom);
     
+    wchar_t* text_buffer = (wchar_t*)malloc(8192 * sizeof(wchar_t)); // ExtTextOut has a maximum string length of 8192
+    
     while(cur) {
         switch(cur->cmd) {
             case RQCMD_DRAW_TEXT: {
-                //rq_draw_text* dtxt = (rq_draw_text*)cur;
+                rq_draw_text* dtxt = (rq_draw_text*)cur;
+                int x = (int)(dtxt->x * disp->s_width);
+                int y = (int)(dtxt->y * disp->s_height);
+                mbstowcs(text_buffer, dtxt->text, 8192);
+                ExtTextOutW(hDC, x, y, 0, NULL, text_buffer, dtxt->text_len, NULL);
                 break;
             }
             case RQCMD_DRAW_IMAGE: {

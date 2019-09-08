@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdio.h>
+#include <locale.h>
 #include <assert.h>
 #include "display.h"
 #include "present.h"
@@ -26,7 +27,7 @@ static void render_loop(const char* filename) {
     display_event ev;
     bool requested_exit = false;
     render_queue* rq = NULL;
-
+    
     // Open presentation file
     file = present_open(filename);
     if(file) {
@@ -43,25 +44,25 @@ static void render_loop(const char* filename) {
                     int f;
                     switch(ev) {
                         case DISPEV_PREV:
-                            f = present_seek(file, -1);
-                            break;
+                        f = present_seek(file, -1);
+                        break;
                         case DISPEV_NEXT:
-                            f = present_seek(file, 1);
-                            break;
+                        f = present_seek(file, 1);
+                        break;
                         case DISPEV_START:
-                            f = present_seek_to(file, 0);
-                            break;
+                        f = present_seek_to(file, 0);
+                        break;
                         case DISPEV_END:
-                            f = present_seek_to(file, -1);
-                            break;
+                        f = present_seek_to(file, -1);
+                        break;
                         case DISPEV_EXIT:
-                            requested_exit = true;
-                            break;
+                        requested_exit = true;
+                        break;
                         case DISPEV_NONE:
-                            break;
+                        break;
                         default:
-                            assert(0);
-                            break;
+                        assert(0);
+                        break;
                     }
                     // Only re-render if something happened
                     present_fill_render_queue(file, rq);
@@ -79,6 +80,7 @@ static void render_loop(const char* filename) {
 }
 
 int main(int argc, char** argv) {
+    setlocale(LC_ALL, "en_US.utf8");
     if(argc == 2) {
         render_loop(argv[1]);
     } else {
