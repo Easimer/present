@@ -34,8 +34,6 @@ static void render_loop(const char* filename) {
         // Open a window
         disp = display_open();
         if(disp) {
-            // Allocate an empty render buffer
-            rq = rq_alloc();
             // Loop until the presentation is over or
             // the user has requested an exit (by pressing ESC)
             while(!present_over(file) && !requested_exit) {
@@ -64,15 +62,21 @@ static void render_loop(const char* filename) {
                         assert(0);
                         break;
                     }
+                    // Allocate an empty render buffer
+                    rq = rq_alloc();
                     // Only re-render if something happened
                     present_fill_render_queue(file, rq);
                     // Display render queue
                     display_render_queue(disp, rq);
-                    // Clear render queue
-                    rq_clear(rq);
+                    // Free render queue
+                    rq_free(rq);
+                    // NOTE(easimer): previously we allocated an RQ once at startup
+                    // then used it at every redraw, clearing it after the 
+                    // display_render_queue call. But due to images, render queues
+                    // can get quite large and we don't want to hold megabytes of memory 
+                    // hostage while not even using it.
                 }
             }
-            rq_free(rq);
             display_close(disp);
         }
         present_close(file);

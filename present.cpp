@@ -18,6 +18,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <stdint.h>
 #include <errno.h>
 #include <assert.h>
@@ -27,7 +28,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#define PF_MEM_SIZE (8 * 1024 * 1024)
+#define PF_MEM_SIZE (64 * 1024)
 
 enum list_node_type {
     LNODE_INVALID = 0,
@@ -52,8 +53,8 @@ struct list_node_text {
 
 struct list_node_image {
     present_list_node hdr;
-    int width, height;
-    void* buffer;
+    int path_len;
+    const char* path;
 };
 
 struct present_slide {
@@ -247,6 +248,16 @@ inline char* p_getcwd(char* buf, size_t size) {
     
     return ret;
 }
+
+#define PATH_MAX MAX_PATH
+
+inline char* p_realpath(const char* path, char buf[PATH_MAX]) {
+    char* ret = NULL;
+    if(GetFullPathNameA(path, PATH_MAX, buf, NULL) > 0) {
+        ret = buf;
+    }
+    return ret;
+}
 #else
 #include <unistd.h>
 inline int p_chdir(const char* path) {
@@ -255,6 +266,10 @@ inline int p_chdir(const char* path) {
 
 inline char* p_getcwd(char* buf, size_t size) {
     return getcwd(buf, size);
+}
+
+inline char* p_realpath(const char* path, char buf[PATH_MAX]) {
+    return realpath(path, buf);
 }
 #endif
 
@@ -315,12 +330,9 @@ static void swap_red_blue_channels(uint8_t* rgba_buffer, unsigned width, unsigne
 
 static void add_inline_image(present_file* file, parse_state* state, int indent_level, const char* path, unsigned path_len) {
     char* prev_workdir = NULL;
-    int x, y, channels;
     list_node_image* node;
-    char* temp_path;
+    char full_path_buf[PATH_MAX];
     auto slide = state->last;
-    stbi_uc* pixbuf = NULL;
-    stbi_uc* pixbuf_final = NULL;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
@@ -332,40 +344,17 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     save_workdir(&prev_workdir);
     change_to_dir_of_file(file->path);
     
-    // Copy path to a temp buf and make it zero
-    // terminated because stbi wants it that way :(
-    //arena_push_frame(file->mem);
-    //temp_path = (char*)arena_alloc(file->mem, path_len + 1);
-    temp_path = (char*)malloc(path_len + 1);
-    memcpy(temp_path, path, path_len);
-    temp_path[path_len] = 0;
-    
-    // Load pixel data
-    pixbuf = stbi_load(temp_path, &x, &y, &channels, STBI_rgb_alpha);
-    
-    free(temp_path);
-    temp_path = NULL;
-    //arena_pop_frame(file->mem);
+    if(p_realpath(path, full_path_buf)) {
+        unsigned len = (unsigned)strlen(full_path_buf);
+        node->path = (char*)arena_alloc(file->mem, len + 1);
+        node->path_len = len;
+        memcpy((char*)node->path, full_path_buf, len + 1);
+    } else {
+        node->path_len = 0;
+        node->path = NULL;
+    }
     
     restore_workdir(&prev_workdir);
-    
-    if(pixbuf) {
-        unsigned pixbuf_siz = sizeof(stbi_uc) * x * y * 4;
-        pixbuf_final = (stbi_uc*)arena_alloc(file->mem, pixbuf_siz);
-        memcpy(pixbuf_final, pixbuf, pixbuf_siz);
-        if(display_swap_red_blue_channels()) {
-            swap_red_blue_channels((uint8_t*)pixbuf_final, x, y);
-        }
-        stbi_image_free(pixbuf);
-        pixbuf = NULL;
-    } else {
-        fprintf(stderr, "Failed to load image '%.*s': %s!\n", path_len, path, stbi_failure_reason());
-    }
-    assert(pixbuf_final);
-    
-    node->width = x;
-    node->height = y;
-    node->buffer = pixbuf_final;
     
     if(slide->content_cur) {
         if(slide->current_indent_level < indent_level) {
@@ -602,10 +591,10 @@ present_file* present_open(const char* filename) {
                     
                     fprintf(stderr, "Presentation parse error!\n");
                 } else {
-                    auto mmused = arena_used(ret->mem) / 1024;
-                    auto mmsize = arena_size(ret->mem) / 1024;
+                    auto mmused = arena_used(ret->mem);
+                    auto mmsize = arena_size(ret->mem);
                     auto mmperc = (float)mmused / (float)mmsize;
-                    fprintf(stderr, "Presentation uses %u / %u kilobytes of memory (%f%%)\n", mmused, mmsize, mmperc * 100);
+                    fprintf(stderr, "Presentation uses %u / %u bytes of memory (%f%%)\n", mmused, mmsize, mmperc * 100);
                 }
             }
             fclose(f);
@@ -727,16 +716,35 @@ static void process_list_element(present_file* file, present_list_node* node, re
             y += 40;
         } else if(cur->type == LNODE_IMAGE) {
             rq_draw_image* cmd = NULL;
+            int w, h, channels;
+            void *pixbuf, *pixbuf_final;
             list_node_image* img = (list_node_image*)cur;
             cmd = rq_new_cmd<rq_draw_image>(rq, RQCMD_DRAW_IMAGE);
-            cmd->width = img->width;
-            cmd->height = img->height;
-            cmd->buffer = img->buffer;
+            
+            pixbuf = stbi_load(img->path, &w, &h, &channels, STBI_rgb_alpha);
+            if(pixbuf) {
+                unsigned pixbuf_siz = sizeof(stbi_uc) * w * h * 4;
+                pixbuf_final = arena_alloc(rq->mem, pixbuf_siz);
+                memcpy(pixbuf_final, pixbuf, pixbuf_siz);
+                if(display_swap_red_blue_channels()) {
+                    swap_red_blue_channels((uint8_t*)pixbuf_final, w, h);
+                }
+                stbi_image_free(pixbuf);
+                pixbuf = NULL;
+                
+                cmd->width = w;
+                cmd->height = h;
+                cmd->buffer = pixbuf_final;
+            } else {
+                cmd->width = cmd->height = 0;
+                cmd->buffer = NULL;
+            }
+            
             //cmd->x = VIRTUAL_X(x);
             cmd->x = 0;
             cmd->y = VIRTUAL_Y(y);
-            assert(img->buffer);
-            y += img->height;
+            assert(cmd->buffer);
+            y += cmd->height;
         }
         if(cur->children) {
             x += 24;
@@ -791,6 +799,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     cmd->y = VIRTUAL_Y(720 - 24);
     cmd->size = VIRTUAL_Y(24);
     cmd->color = file->color_fg;
+    cmd->font_name = NULL;
 }
 
 void present_fill_render_queue(present_file* file, render_queue* rq) {

@@ -20,17 +20,17 @@
 #include "render_queue.h"
 #include "arena.h"
 
-#define RQ_ARENA_SIZE (16 * 1024) // 16KiB
+#define RQ_ARENA_SIZE (16 * 1024 * 1024) // 16MiB
 
 render_queue* rq_alloc() {
     render_queue* ret = NULL;
-
+    
     ret = (render_queue*)malloc(sizeof(render_queue));
     if(ret) {
         ret->mem = arena_create(RQ_ARENA_SIZE);
         ret->commands = ret->last = NULL;
     }
-
+    
     return ret;
 }
 
@@ -59,7 +59,7 @@ void* rq_new_cmd(render_queue* rq, unsigned size) {
         rq_draw_cmd* hdr = (rq_draw_cmd*)ret;
         hdr->cmd = RQCMD_INVALID;
         hdr->next = NULL;
-
+        
         if(rq->last) {
             rq->last->next = (rq_draw_cmd*)ret;
             rq->last = (rq_draw_cmd*)ret;
