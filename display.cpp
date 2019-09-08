@@ -209,10 +209,6 @@ void display_render_queue(display* disp, render_queue* rq) {
     if(disp && rq && disp->conn) {
         rq_draw_cmd* cur = rq->commands;
         
-        // clear backbuf
-        cairo_set_source_rgb(disp->cr, 1, 1, 1);
-        cairo_paint(disp->cr);
-        
         // setup text drawing
         cairo_select_font_face(disp->cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_source_rgb(disp->cr, 0, 0, 0);
@@ -225,7 +221,7 @@ void display_render_queue(display* disp, render_queue* rq) {
                     cairo_select_font_face(disp->cr, font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
                     cairo_set_font_size(disp->cr, dtxt->size * disp->s_height);
                     cairo_move_to(disp->cr, dtxt->x * disp->s_width, dtxt->y * disp->s_height);
-                    cairo_set_source_rgba(disp->cr, dtxt->r, dtxt->g, dtxt->b, dtxt->a);
+                    cairo_set_source_rgba(disp->cr, dtxt->color.r, dtxt->color.g, dtxt->color.b, dtxt->color.a);
                     cairo_show_text(disp->cr, dtxt->text);
                     break;
                 }
@@ -251,7 +247,7 @@ void display_render_queue(display* disp, render_queue* rq) {
                     y = drect->y0 * disp->s_height;
                     w = drect->x1 * disp->s_width - x;
                     h = drect->y1 * disp->s_height - y;
-                    cairo_set_source_rgba(disp->cr, drect->r, drect->g, drect->b, drect->a);
+                    cairo_set_source_rgba(disp->cr, drect->color.r, drect->color.g, drect->color.b, drect->color.a);
                     cairo_rectangle(disp->cr, x, y, w, h);
                     cairo_fill(disp->cr);
                     break;

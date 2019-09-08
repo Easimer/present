@@ -25,6 +25,10 @@ enum rq_cmd {
     RQCMD_MAX
 };
 
+struct rgba_color {
+    float r, g, b, a;
+};
+
 struct rq_draw_cmd {
     rq_cmd cmd;
     rq_draw_cmd* next;
@@ -36,7 +40,7 @@ struct rq_draw_text {
     float size; // text height in percentage of screen height
     int text_len;
     const char* text;
-    float r, g, b, a;
+    rgba_color color;
     
     const char* font_name;
 };
@@ -51,7 +55,7 @@ struct rq_draw_image {
 struct rq_draw_rect {
     rq_draw_cmd hdr;
     float x0, y0, x1, y1; // [0, 1] normalized ss coords
-    float r, g, b, a;
+    rgba_color color;
 };
 
 struct render_queue {
@@ -81,7 +85,7 @@ inline T* rq_new_cmd(render_queue* rq, rq_cmd cmd = RQCMD_INVALID) {
 #define VIRTUAL_X(val) ((val) / 1280.0f)
 #define VIRTUAL_Y(val) ((val) / 720.0f)
 #define SET_RGB(aggr, R, G, B)  \
-aggr->r = (R) / 255.0f; \
-aggr->g = (G) / 255.0f; \
-aggr->b = (B) / 255.0f; \
-aggr->a = 1;
+(aggr).r = (R) / 255.0f; \
+(aggr).g = (G) / 255.0f; \
+(aggr).b = (B) / 255.0f; \
+(aggr).a = 1;

@@ -85,6 +85,15 @@ struct present_file {
     const char* font_title; // Font used on the title slide
     const char* font_chapter; // Font used for chapter title
     const char* font_general; // Font used for content text and as a fallback
+    
+    // color of slide background (default: 255, 255, 255)
+    rgba_color color_bg;
+    // color of slide text (default: 0, 0, 0)
+    rgba_color color_fg;
+    // color of slide header (default: 43, 203, 186)
+    rgba_color color_bg_header;
+    // color of slide header text (default: 255, 255, 255)
+    rgba_color color_fg_header;
 };
 
 struct parse_state {
@@ -442,7 +451,7 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
     //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
 }
 
-void set_font(present_file* file, const char** dst, const char* name, unsigned name_len) {
+static void set_font(present_file* file, const char** dst, const char* name, unsigned name_len) {
     char* buf;
     assert(file && dst && name && name_len > 0);
     if(file && dst && name && name_len > 0) {
@@ -453,6 +462,36 @@ void set_font(present_file* file, const char** dst, const char* name, unsigned n
         memcpy(buf, name, name_len);
         buf[name_len] = 0;
         *dst = buf;
+    }
+}
+
+static void set_color(present_file* file, rgba_color* dst, const char* col, unsigned col_len) {
+    assert(file && dst && col && col_len > 0);
+    if(file && dst && col && col_len > 0) {
+        if(col_len < 7) {
+            fprintf(stderr, "Warning: hex color '%.*s' is too short, ignored!\n", col_len, col);
+        } else if(col_len > 9) {
+            fprintf(stderr, "Warning: hex color '%.*s' is too long, ignoring trailing characters (%.*s)!\n", col_len, col, 7, col);
+        } else {
+            unsigned hexcol = 0;
+            assert(col[0] == '#' && "Not a hex color!");
+            for(unsigned i = 1; i < col_len; i++) {
+                hexcol <<= 4;
+                if(col[i] >= '0' && col[i] <= '9') {
+                    hexcol |= ((col[i] - '0') & 0xF);
+                } else if((col[i] >= 'A' && col[i] <= 'F') || (col[i] >= 'a' && col[i] <= 'f')) {
+                    hexcol |= (10 + ((col[i] - 'A') & 0xF));
+                }
+            }
+            dst->r = ((hexcol & 0x00FF0000) >> 16) / 255.0f;
+            dst->g = ((hexcol & 0x0000FF00) >>  8) / 255.0f;
+            dst->b = ((hexcol & 0x000000FF) >>  0) / 255.0f;
+            if(col_len >= 9) {
+                dst->a = ((hexcol & 0xFF000000) >> 24) / 255.0f;
+            } else {
+                dst->a = 1;
+            }
+        }
     }
 }
 
@@ -508,6 +547,14 @@ static bool parse_file(present_file* file, FILE* f) {
                             set_font(file, &file->font_title, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "FONT_CHAPTER", directive_len) == 0) {
                             set_font(file, &file->font_chapter, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "COLOR_BG", directive_len) == 0) {
+                            set_color(file, &file->color_bg, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "COLOR_FG", directive_len) == 0) {
+                            set_color(file, &file->color_fg, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "COLOR_BG_HEADER", directive_len) == 0) {
+                            set_color(file, &file->color_bg_header, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "COLOR_FG_HEADER", directive_len) == 0) {
+                            set_color(file, &file->color_fg_header, directive_arg, directive_arg_len);
                         } else {
                             fprintf(stderr, "Warning: unknown directive: '%.*s'\n",
                                     directive_len, directive);
@@ -544,6 +591,10 @@ present_file* present_open(const char* filename) {
                 ret->slide_count = 1; // implicit title slide
                 ret->current_slide = 0;
                 ret->slides = NULL;
+                SET_RGB(ret->color_bg, 255, 255, 255);
+                SET_RGB(ret->color_fg, 0, 0, 0);
+                SET_RGB(ret->color_bg_header, 43, 203, 186);
+                SET_RGB(ret->color_fg_header, 255, 255, 255);
                 if(!parse_file(ret, f)) {
                     arena_destroy(ret->mem);
                     free(ret);
@@ -615,7 +666,16 @@ int present_seek_to(present_file* file, int abs) {
     return ret;
 }
 
+static void present_clear_screen(present_file* file, render_queue* rq, float r, float b, float g) {
+    auto rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
+    rect->x0 = rect->y0 = 0;
+    rect->x1 = rect->y1 = 1;
+    rect->color.r = r; rect->color.g = g;
+    rect->color.b = b; rect->color.a = 1;
+}
+
 static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
+    present_clear_screen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
     if(file->title_len && file->title) {
         auto title = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
         title->x = VIRTUAL_X(24);
@@ -624,7 +684,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
         title->text_len = file->title_len;
         title->text = file->title;
         title->font_name = file->font_title;
-        SET_RGB(title, 0, 0, 0); title->a = 1;
+        title->color = file->color_fg;
     }
     
     if(file->authors_len && file->authors) {
@@ -635,17 +695,13 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
         authors->text_len = file->authors_len;
         authors->text = file->authors;
         authors->font_name = file->font_title;
-        SET_RGB(authors, 21, 21, 21); authors->a = 1;
+        authors->color = file->color_fg;
     }
 }
 
 static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
     // a filled rectangle covering the screen
-    auto rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
-    rect->x0 = rect->y0 = 0;
-    rect->x1 = rect->y1 = 1;
-    rect->r = rect->g = rect->b = 0;
-    rect->a = 1;
+    present_clear_screen(file, rq, 0, 0, 0);
 }
 
 static void process_list_element(present_file* file, present_list_node* node, render_queue* rq,
@@ -662,7 +718,7 @@ static void process_list_element(present_file* file, present_list_node* node, re
             cmd->text_len = text->text_length;
             cmd->text = text->text;
             cmd->font_name = file->font_general;
-            SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
+            cmd->color = file->color_fg;
             y += 40;
         } else if(cur->type == LNODE_IMAGE) {
             rq_draw_image* cmd = NULL;
@@ -692,11 +748,13 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     rq_draw_text* cmd = NULL;
     rq_draw_rect* rect = NULL;
     
+    present_clear_screen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
+    
     if(slide->chapter_title) {
         rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
         rect->x0 = 0; rect->y0 = 0;
         rect->x1 = 1; rect->y1 = VIRTUAL_Y(72);
-        SET_RGB(rect, 43, 203, 186); rect->a = 1;
+        rect->color = file->color_bg_header;
         
         cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10);
@@ -705,7 +763,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->text_len = slide->chapter_title_len;
         cmd->text = slide->chapter_title;
         cmd->font_name = file->font_chapter;
-        SET_RGB(cmd, 255, 255, 255); cmd->a = 1;
+        cmd->color = file->color_fg_header;
     }
     if(slide->subtitle) {
         cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
@@ -714,7 +772,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->text_len = slide->subtitle_len;
         cmd->text = slide->subtitle;
         cmd->font_name = file->font_general;
-        SET_RGB(cmd, 0, 0, 0); cmd->a = 1;
+        cmd->color = file->color_fg;
     }
     
     process_list_element(file, slide->content, rq, x, y);
@@ -727,12 +785,12 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     cmd->x = VIRTUAL_X(4);
     cmd->y = VIRTUAL_Y(720 - 24);
     cmd->size = VIRTUAL_Y(24);
-    SET_RGB(cmd, 0, 0, 0);
+    cmd->color = file->color_fg;
 }
 
 void present_fill_render_queue(present_file* file, render_queue* rq) {
-    assert(file);
-    if(file) {
+    assert(file && rq);
+    if(file && rq) {
         if(file->current_slide == 0) {
             present_fill_rq_title_slide(file, rq);
         } else if(file->current_slide == file->slide_count) {

@@ -4,6 +4,11 @@
 #FONT_CHAPTER Times New Roman
 #FONT Calibri Light
 
+#COLOR_BG #FFFFFF
+#COLOR_FG #FF000000
+#COLOR_BG_HEADER #2BCBBA
+#COLOR_FG_HEADER #FFFFFF
+
 #TITLE Example Presentation
 #AUTHORS Example et al.
 
