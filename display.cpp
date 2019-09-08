@@ -31,7 +31,7 @@ struct display {
     xcb_gcontext_t ctx; // black
     xcb_gcontext_t fontgc;
     uint16_t s_width, s_height;
-
+    
     cairo_surface_t* surf;
     cairo_t* cr;
 };
@@ -39,17 +39,17 @@ struct display {
 static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
 {
     xcb_screen_iterator_t screen_iter = xcb_setup_roots_iterator(xcb_get_setup(c));
-
+    
     for (; screen_iter.rem; xcb_screen_next(&screen_iter)) {
         xcb_depth_iterator_t depth_iter = xcb_screen_allowed_depths_iterator(screen_iter.data);
         for (; depth_iter.rem; xcb_depth_next(&depth_iter)) {
             xcb_visualtype_iterator_t visual_iter = xcb_depth_visuals_iterator(depth_iter.data);
             for (; visual_iter.rem; xcb_visualtype_next(&visual_iter))
                 if (visual == visual_iter.data->visual_id)
-                    return visual_iter.data;
+                return visual_iter.data;
         }
     }
-
+    
     return NULL;
 }
 
@@ -64,7 +64,7 @@ display* display_open() {
     xcb_font_t font;
     xcb_visualtype_t* visual;
     unsigned int mask = XCB_GC_FOREGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-
+    
     ret = (display*)malloc(sizeof(display));
     if(ret) {
         conn = xcb_connect(NULL, NULL);
@@ -74,24 +74,24 @@ display* display_open() {
         values[0] = scr->black_pixel;
         xcb_create_gc(conn, fg, wnd, mask, values);
         values[0] = scr->white_pixel;
-
+        
         wnd = xcb_generate_id(conn);
         mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
         values[0] = scr->white_pixel;
         values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_RELEASE |
             XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-
+        
         xcb_create_window(conn, XCB_COPY_FROM_PARENT, wnd, scr->root,
-                0, 0, 1280, 720, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                scr->root_visual, mask, values);
+                          0, 0, 1280, 720, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                          scr->root_visual, mask, values);
         // TODO: implement fullscreen and ask xcb for display resolution
-
+        
         // https://vincentsanders.blogspot.com/2010/04/xcb-programming-is-hard.html
         xcb_map_window(conn, wnd);
         xcb_flush(conn);
-
+        
         visual = find_visual(conn, scr->root_visual);
-
+        
         // load a font
         font = xcb_generate_id(conn);
         xcb_open_font(conn, font, strlen(font_name), font_name);
@@ -102,15 +102,15 @@ display* display_open() {
         values[2] = font;
         xcb_create_gc(conn, fontgc, wnd, mask, values);
         xcb_close_font(conn, font);
-
+        
         // send fullscreen hint
         xcb_ewmh_connection_t EWMH;
         xcb_intern_atom_cookie_t* cookie = xcb_ewmh_init_atoms(conn, &EWMH);
         if(xcb_ewmh_init_atoms_replies(&EWMH, cookie, NULL)) {
             xcb_change_property(conn, XCB_PROP_MODE_REPLACE, wnd,
-                    EWMH._NET_WM_STATE, XCB_ATOM_ATOM, 32, 1, &(EWMH._NET_WM_STATE_FULLSCREEN));
+                                EWMH._NET_WM_STATE, XCB_ATOM_ATOM, 32, 1, &(EWMH._NET_WM_STATE_FULLSCREEN));
         }
-
+        
         ret->conn = conn;
         ret->wnd = wnd;
         ret->scr = scr;
@@ -118,11 +118,11 @@ display* display_open() {
         ret->fontgc = fontgc;
         ret->s_width = 1280;
         ret->s_height = 720;
-
+        
         ret->surf = cairo_xcb_surface_create(conn, wnd, visual, ret->s_width, ret->s_height);
         ret->cr = cairo_create(ret->surf);
     }
-
+    
     return ret;
 }
 
@@ -133,7 +133,7 @@ void display_close(display* disp) {
             cairo_destroy(disp->cr);
             cairo_surface_finish(disp->surf);
             cairo_surface_destroy(disp->surf);
-
+            
             xcb_disconnect(disp->conn);
         }
         free(disp);
@@ -156,9 +156,9 @@ bool display_fetch_event(display* disp, display_event* out) {
                     break;
                 }
                 case XCB_EXPOSE:
-                    *out = DISPEV_NONE; // force redraw
-                    ret = true;
-                    break;
+                *out = DISPEV_NONE; // force redraw
+                ret = true;
+                break;
                 case XCB_BUTTON_RELEASE: {
                     xcb_button_release_event_t *ev = (xcb_button_release_event_t *)e;
                     ret = true;
@@ -176,24 +176,24 @@ bool display_fetch_event(display* disp, display_event* out) {
                     ret = true;
                     switch(ev->detail) {
                         case 9: // ESC
-                            *out = DISPEV_EXIT;
-                            break;
+                        *out = DISPEV_EXIT;
+                        break;
                         case 65: // SPACE
                         case 114: // right cursor
-                            *out = DISPEV_NEXT;
-                            break;
+                        *out = DISPEV_NEXT;
+                        break;
                         case 113: // left cursor
-                            *out = DISPEV_PREV;
-                            break;
+                        *out = DISPEV_PREV;
+                        break;
                         case 112: // Page up
-                            *out = DISPEV_END;
-                            break;
+                        *out = DISPEV_START;
+                        break;
                         case 117: // Page down
-                            *out = DISPEV_START;
-                            break;
+                        *out = DISPEV_END;
+                        break;
                         default:
-                            ret = false;
-                            break;
+                        ret = false;
+                        break;
                     }
                     break;
                 }
@@ -208,15 +208,15 @@ void display_render_queue(display* disp, render_queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
         rq_draw_cmd* cur = rq->commands;
-
+        
         // clear backbuf
         cairo_set_source_rgb(disp->cr, 1, 1, 1);
         cairo_paint(disp->cr);
-
+        
         // setup text drawing
         cairo_select_font_face(disp->cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_source_rgb(disp->cr, 0, 0, 0);
-
+        
         while(cur) {
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
@@ -229,13 +229,13 @@ void display_render_queue(display* disp, render_queue* rq) {
                 }
                 case RQCMD_DRAW_IMAGE: {
                     rq_draw_image* dimg = (rq_draw_image*)cur;
-                        cairo_surface_t* imgsurf;
+                    cairo_surface_t* imgsurf;
                     cairo_save(disp->cr);
                     imgsurf = cairo_image_surface_create_for_data(
-                            (unsigned char*)dimg->buffer,
-                            CAIRO_FORMAT_ARGB32,
-                            dimg->width, dimg->height,
-                            dimg->width * 4);
+                        (unsigned char*)dimg->buffer,
+                        CAIRO_FORMAT_ARGB32,
+                        dimg->width, dimg->height,
+                        dimg->width * 4);
                     cairo_set_source_surface(disp->cr, imgsurf, dimg->x * disp->s_width, dimg->y * disp->s_height);
                     cairo_paint(disp->cr);
                     cairo_surface_destroy(imgsurf);
@@ -255,7 +255,7 @@ void display_render_queue(display* disp, render_queue* rq) {
                     break;
                 }
                 default:
-                    break;
+                break;
             }
             cur = cur->next;
         }

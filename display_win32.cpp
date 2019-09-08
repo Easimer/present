@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <assert.h>
 #pragma warning(push)
 #pragma warning(disable : 4458)
 #define WIN32_LEAN_AND_MEAN
@@ -14,12 +15,55 @@ struct display {
     
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
+    float s_width, s_height;
+    
+    HPEN penInvis;
+    HPEN penBlack;
     
     // For WndProc
     HDC backdc;
     display_event* ev_out;
     bool ev_res;
+    render_queue* rq;
 };
+
+static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const render_queue* rq) {
+    assert(rClient && rq);
+    
+    rq_draw_cmd* cur = rq->commands;
+    // clear bg
+    SelectObject(hDC, disp->penInvis);
+    Rectangle(hDC, 0, 0, rClient->right, rClient->bottom);
+    
+    while(cur) {
+        switch(cur->cmd) {
+            case RQCMD_DRAW_TEXT: {
+                //rq_draw_text* dtxt = (rq_draw_text*)cur;
+                break;
+            }
+            case RQCMD_DRAW_IMAGE: {
+                //rq_draw_image* dimg = (rq_draw_image*)cur;
+                break;
+            }
+            case RQCMD_DRAW_RECTANGLE: {
+                rq_draw_rect* drect = (rq_draw_rect*)cur;
+                int r = (int)(drect->r * 255); int g = (int)(drect->g * 255);
+                int b = (int)(drect->b * 255); //int a = (int)(drect->a * 255);
+                int x0 = (int)(drect->x0 * disp->s_width);
+                int y0 = (int)(drect->y0 * disp->s_height);
+                int x1 = (int)(drect->x1 * disp->s_width);
+                int y1 = (int)(drect->y1 * disp->s_height);
+                HBRUSH brRect = CreateSolidBrush(RGB(r, g, b));
+                SelectObject(hDC, brRect);
+                SelectObject(hDC, disp->penInvis);
+                Rectangle(hDC, x0, y0, x1, y1);
+                DeleteObject(brRect);
+                break;
+            }
+        }
+        cur = cur->next;
+    }
+}
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     display* disp = (display*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
@@ -33,18 +77,59 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             PostQuitMessage(0);
             break;
         }
-        case WM_PAINT: {
-            if (disp->ev_out) {
+        case WM_QUIT: {
+            if(disp->ev_out) {
                 disp->ev_res = true;
-                *disp->ev_out = DISPEV_NONE; // Force redraw
+                *disp->ev_out = DISPEV_EXIT;
+            }
+            break;
+        }
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            RECT r;
+            HDC hdc;
+            if(disp->rq) {
+                hdc = BeginPaint(disp->wnd, &ps);
+                GetClientRect(disp->wnd, &r);
+                process_render_queue(disp, hWnd, hdc, &r, disp->rq);
+                EndPaint(disp->wnd, &ps);
             }
             break;
         }
         case WM_KEYUP: {
             if(disp->ev_out) {
                 disp->ev_res = true;
-                *disp->ev_out = DISPEV_NEXT;
+                switch (wParam) {
+                    case VK_LEFT:
+                    *disp->ev_out = DISPEV_PREV;
+                    break;
+                    case VK_RIGHT:
+                    case VK_SPACE:
+                    *disp->ev_out = DISPEV_NEXT;
+                    break;
+                    case VK_PRIOR:
+                    *disp->ev_out = DISPEV_START;
+                    break;
+                    case VK_NEXT:
+                    *disp->ev_out = DISPEV_END;
+                    break;
+                    case VK_ESCAPE:
+                    *disp->ev_out = DISPEV_EXIT;
+                    break;
+                    default:
+                    disp->ev_res = false;
+                    break;
+                }
             }
+            break;
+        }
+        case WM_SIZE: {
+            if(disp->ev_out) {
+                disp->ev_res = true;
+                *disp->ev_out = DISPEV_NONE; // force redraw
+            }
+            disp->s_width = LOWORD(lParam);
+            disp->s_height = HIWORD(lParam);
             break;
         }
     }
@@ -56,6 +141,9 @@ struct display* display_open() {
     WNDCLASSA wc = {0};
     
     if(ret) {
+        ret->rq = NULL;
+        ret->ev_out = NULL;
+        
         GdiplusStartup(&ret->gdiplusToken, &ret->gdiplusStartupInput, NULL);
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpszClassName = "PresentWindow";
@@ -66,11 +154,15 @@ struct display* display_open() {
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
         RegisterClassA(&wc);
+        ret->s_width = 1280;
+        ret->s_height = 720;
         ret->wnd = CreateWindowExA(0, "PresentWindow", "Present",
                                    WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                    0, 0, 1280, 720, NULL, NULL, wc.hInstance, ret);
         ShowWindow(ret->wnd, SW_SHOW);
         UpdateWindow(ret->wnd);
+        ret->penBlack = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+        ret->penInvis = CreatePen(PS_NULL, 1, RGB(0, 0, 0));
     }
     
     return ret;
@@ -78,6 +170,8 @@ struct display* display_open() {
 
 void display_close(display* disp) {
     if(disp) {
+        DeleteObject(disp->penInvis);
+        DeleteObject(disp->penBlack);
         GdiplusShutdown(disp->gdiplusToken);
         DestroyWindow(disp->wnd);
     }
@@ -100,20 +194,14 @@ bool display_fetch_event(display* disp, display_event* out) {
 }
 
 void display_render_queue(display* disp, render_queue* rq) {
-    //PAINTSTRUCT ps;
-    //RECT r;
-    HDC hdc;
+    MSG msg = {0};
     
     if(disp && rq) {
-        hdc = GetDC(disp->wnd);
-        Graphics g(hdc);
-        for(int y = 0; y < 256; y++) {
-            for(int x = 0; x < 256; x++) {
-                SetPixel(hdc, x, y, RGB(255, 0, 0));
-            }
-        }
-        SwapBuffers(hdc);
-        ReleaseDC(disp->wnd, hdc);
+        assert(!disp->rq);
+        disp->rq = rq;
+        InvalidateRect(disp->wnd, NULL, TRUE);
+        UpdateWindow(disp->wnd);
+        disp->rq = NULL;
     }
 }
 
