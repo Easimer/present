@@ -70,7 +70,39 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
                 break;
             }
             case RQCMD_DRAW_IMAGE: {
-                //rq_draw_image* dimg = (rq_draw_image*)cur;
+                rq_draw_image* dimg = (rq_draw_image*)cur;
+                int x = (int)(dimg->x * disp->s_width);
+                int y = (int)(dimg->y * disp->s_height);
+                int w = (int)(dimg->width);
+                int h = (int)(dimg->height);
+                // upload image to GDI
+                BITMAPINFO bmpinf = {0};
+                //memset(bmpinf, 0, sizeof(bmpinf));
+                bmpinf.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+                bmpinf.bmiHeader.biWidth = dimg->width;
+                bmpinf.bmiHeader.biHeight = -dimg->height;
+                bmpinf.bmiHeader.biPlanes = 1;
+                bmpinf.bmiHeader.biBitCount = 32;
+                bmpinf.bmiHeader.biCompression = BI_RGB;
+                void* buffer = NULL;
+                HBITMAP hDib = CreateDIBSection(hDC, &bmpinf,
+                                                DIB_RGB_COLORS, &buffer,
+                                                0, 0);
+                if(buffer == NULL) {
+                    DebugBreak();
+                }
+                HDC hDibDC = CreateCompatibleDC(hDC);
+                SelectObject(hDibDC, hDib);
+                
+                // TODO(easimer): what about stride?
+                memcpy(buffer, dimg->buffer, dimg->width * dimg->height * 4);
+                
+                (void)x, (void)y, (void)w, (void)h;
+                
+                BitBlt(hDC, x, y, w, h, hDibDC, 0, 0, SRCCOPY);
+                
+                
+                ReleaseDC(disp->wnd, hDibDC);
                 break;
             }
             case RQCMD_DRAW_RECTANGLE: {
@@ -238,5 +270,5 @@ void display_render_queue(display* disp, render_queue* rq) {
 }
 
 bool display_swap_red_blue_channels() {
-    return false;
+    return true;
 }
