@@ -221,6 +221,8 @@ void display_render_queue(display* disp, render_queue* rq) {
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
                     rq_draw_text* dtxt = (rq_draw_text*)cur;
+                    const char* font_name = dtxt->font_name ? dtxt->font_name : "sans-serif";
+                    cairo_select_font_face(disp->cr, font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
                     cairo_set_font_size(disp->cr, dtxt->size * disp->s_height);
                     cairo_move_to(disp->cr, dtxt->x * disp->s_width, dtxt->y * disp->s_height);
                     cairo_set_source_rgba(disp->cr, dtxt->r, dtxt->g, dtxt->b, dtxt->a);
