@@ -99,13 +99,13 @@ Sets the foreground color of the slides, including the opening slide.
 Argument must be a hex-encoded RGB or ARGB color. This setting is
 global and if used multiple times, only the last instance will apply.
 
-##### `COLOR_BG_HEADER`
+##### `#COLOR_BG_HEADER`
 Sets the background color of the header (the rectangle where the
 chapter title is). Argument must be a hex-encoded RGB or ARGB color.
 This setting is global and if used multiple times, only the last
 instance will apply.
 
-##### `COLOR_FG_HEADER`
+##### `#COLOR_FG_HEADER`
 Sets the color of the chapter title. Argument must be a hex-encoded
 RGB or ARGB color. This setting is global and if used multiple times,
 only the last instance will apply.
