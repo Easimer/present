@@ -10,6 +10,9 @@ using namespace Gdiplus;
 #pragma warning(pop)
 #include "display.h"
 
+// Pseudo-event to unblock display_fetch_event after startup and draw the title slide
+// Posted in display_open()
+// WPARAM and LPARAM are always zero.
 #define WM_JUMPSTART (WM_USER + 0x0000)
 
 struct display {
