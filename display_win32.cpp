@@ -31,20 +31,42 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
     assert(rClient && rq);
     
     rq_draw_cmd* cur = rq->commands;
+    HFONT fntCurrent = NULL;
+    int font_size = 0;
     // clear bg
     SelectObject(hDC, disp->penInvis);
     Rectangle(hDC, 0, 0, rClient->right, rClient->bottom);
     
     wchar_t* text_buffer = (wchar_t*)malloc(8192 * sizeof(wchar_t)); // ExtTextOut has a maximum string length of 8192
+    SetBkMode(hDC, TRANSPARENT);
+    SetTextAlign(hDC, TA_BOTTOM);
     
     while(cur) {
         switch(cur->cmd) {
             case RQCMD_DRAW_TEXT: {
                 rq_draw_text* dtxt = (rq_draw_text*)cur;
+                int r = (int)(dtxt->r * 255); int g = (int)(dtxt->g * 255);
+                int b = (int)(dtxt->b * 255);
                 int x = (int)(dtxt->x * disp->s_width);
                 int y = (int)(dtxt->y * disp->s_height);
-                mbstowcs(text_buffer, dtxt->text, 8192);
-                ExtTextOutW(hDC, x, y, 0, NULL, text_buffer, dtxt->text_len, NULL);
+                int size = (int)(dtxt->size * disp->s_height);
+                size_t wlen = mbstowcs(text_buffer, dtxt->text, 8192);
+                
+                if(font_size != size) {
+                    font_size = size;
+                    if(fntCurrent) {
+                        DeleteObject(fntCurrent);
+                    }
+                    fntCurrent = CreateFontA(font_size, 0, 0, 0, FW_NORMAL,
+                                             FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                             CLEARTYPE_QUALITY, DEFAULT_PITCH,
+                                             "Times New Roman");
+                }
+                SelectObject(hDC, fntCurrent);
+                SetTextColor(hDC, RGB(r, g, b));
+                
+                ExtTextOutW(hDC, x, y, ETO_OPAQUE, NULL, text_buffer, (UINT)wlen, NULL);
                 break;
             }
             case RQCMD_DRAW_IMAGE: {
@@ -69,6 +91,10 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
         }
         cur = cur->next;
     }
+    if(fntCurrent) {
+        DeleteObject(fntCurrent);
+    }
+    free(text_buffer);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
