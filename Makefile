@@ -14,4 +14,10 @@ present: $(OBJECTS)
 clean:
 	rm -f present $(OBJECTS)
 
-.PHONY: clean
+install: present
+	install -o root -g root -m 555 -s -v present /usr/local/bin/
+
+uninstall:
+	rm -v -f /usr/local/bin/present
+
+.PHONY: clean install uninstall
