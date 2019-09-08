@@ -601,6 +601,11 @@ present_file* present_open(const char* filename) {
                     ret = NULL;
                     
                     fprintf(stderr, "Presentation parse error!\n");
+                } else {
+                    auto mmused = arena_used(ret->mem) / 1024;
+                    auto mmsize = arena_size(ret->mem) / 1024;
+                    auto mmperc = (float)mmused / (float)mmsize;
+                    fprintf(stderr, "Presentation uses %u / %u kilobytes of memory (%f%%)\n", mmused, mmsize, mmperc * 100);
                 }
             }
             fclose(f);
