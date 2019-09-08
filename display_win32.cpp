@@ -51,8 +51,8 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
         switch(cur->cmd) {
             case RQCMD_DRAW_TEXT: {
                 rq_draw_text* dtxt = (rq_draw_text*)cur;
-                int r = (int)(dtxt->r * 255); int g = (int)(dtxt->g * 255);
-                int b = (int)(dtxt->b * 255);
+                int r = (int)(dtxt->color.r * 255); int g = (int)(dtxt->color.g * 255);
+                int b = (int)(dtxt->color.b * 255);
                 int x = (int)(dtxt->x * disp->s_width);
                 int y = (int)(dtxt->y * disp->s_height);
                 int size = (int)(dtxt->size * disp->s_height);
@@ -115,8 +115,8 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
             }
             case RQCMD_DRAW_RECTANGLE: {
                 rq_draw_rect* drect = (rq_draw_rect*)cur;
-                int r = (int)(drect->r * 255); int g = (int)(drect->g * 255);
-                int b = (int)(drect->b * 255); //int a = (int)(drect->a * 255);
+                int r = (int)(drect->color.r * 255); int g = (int)(drect->color.g * 255);
+                int b = (int)(drect->color.b * 255); //int a = (int)(drect->a * 255);
                 int x0 = (int)(drect->x0 * disp->s_width);
                 int y0 = (int)(drect->y0 * disp->s_height);
                 int x1 = (int)(drect->x1 * disp->s_width);
