@@ -23,7 +23,6 @@
 struct mem_arena {
     unsigned size;
     unsigned used;
-    uint8_t* frame_pointer;
     uint8_t* cursor;
     uint8_t* content;
 };
@@ -38,7 +37,6 @@ mem_arena* arena_create(unsigned size) {
         ret->size = size;
         ret->used = 0;
         ret->content = ret->cursor = (uint8_t*)(ret + 1);
-        ret->frame_pointer = ret->content;
     }
     
     return ret;
@@ -56,7 +54,6 @@ void arena_clear(mem_arena* arena) {
     if(arena) {
         arena->used = 0;
         arena->cursor = arena->content;
-        arena->frame_pointer = arena->content;
     }
 }
 
