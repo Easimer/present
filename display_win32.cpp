@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #pragma warning(push)
@@ -215,12 +216,64 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }
 
+struct Monitor_Enumeration_Result {
+    bool headless = true;
+    HMONITOR hMonitor = NULL;
+    RECT rect;
+};
+
+static BOOL CALLBACK MonitorEnumerationProc(HMONITOR hMonitor, HDC hDC, LPRECT rect, LPARAM lParam) {
+    MONITORINFO minf;
+    minf.cbSize = sizeof(minf);
+    auto res = (Monitor_Enumeration_Result*)lParam;
+
+    res->headless = false;
+    assert(hMonitor != NULL);
+
+    if (GetMonitorInfoA(hMonitor, &minf)) {
+        if ((minf.dwFlags & MONITORINFOF_PRIMARY) == 0) {
+            // Found a non-primary display
+            res->hMonitor = hMonitor;
+            res->rect = minf.rcMonitor;
+            fprintf(stderr, "display_win32: found a secondary display (%d %d %d %d)\n", res->rect.left, res->rect.top, res->rect.right, res->rect.bottom);
+        } else {
+            if (!res->hMonitor) {
+                // Set the display to this one (a primary one), only if we haven't found an
+                // other display yet
+                res->hMonitor = hMonitor;
+                res->rect = minf.rcMonitor;
+                fprintf(stderr, "display_win32: found the primary display (%d %d %d %d)\n", res->rect.left, res->rect.top, res->rect.right, res->rect.bottom);
+            }
+        }
+    } else {
+        fprintf(stderr, "display_win32: GetMonitorInfo has failed\n");
+    }
+
+    return TRUE;
+}
+
 struct display* display_open() {
-    display* ret = (display*)malloc(sizeof(display));
+    display* ret = NULL;
     WNDCLASSA wc = {0};
-    int screen_width, screen_height;
+    LONG win_x = -1, win_y = -1, win_w = -1, win_h = -1;
+    Monitor_Enumeration_Result monenum;
+
+    if (EnumDisplayMonitors(NULL, NULL, MonitorEnumerationProc, (LPARAM)&monenum)) {
+        if (!monenum.headless && monenum.hMonitor) {
+            win_x = monenum.rect.left;
+            win_y = monenum.rect.top;
+            win_w = monenum.rect.right - monenum.rect.left;
+            win_h = monenum.rect.bottom - monenum.rect.top;
+            ret = (display*)malloc(sizeof(display));
+        } else {
+            fprintf(stdout, "display_win32: couldn't find displays\n");
+        }
+    } else {
+        fprintf(stdout, "display_win32: failed to enumerate displays\n");
+    }
     
     if(ret) {
+        fprintf(stdout, "display_win32: [%d %d %d %d]\n", win_x, win_y, win_w, win_h);
         ret->rq = NULL;
         ret->ev_out = NULL;
         
@@ -234,13 +287,11 @@ struct display* display_open() {
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
         RegisterClassA(&wc);
-        screen_width = GetSystemMetrics(SM_CXSCREEN);
-        screen_height = GetSystemMetrics(SM_CYSCREEN);
-        ret->s_width = (float)screen_width;
-        ret->s_height = (float)screen_height;
+        ret->s_width = (float)win_w;
+        ret->s_height = (float)win_h;
         ret->wnd = CreateWindowExA(0, "PresentWindow", "Present",
                                    WS_POPUP | WS_VISIBLE,
-                                   0, 0, screen_width, screen_height,
+                                   win_x, win_y, win_w, win_h,
                                    NULL, NULL, wc.hInstance, ret);
         ShowWindow(ret->wnd, SW_SHOW);
         UpdateWindow(ret->wnd);
