@@ -17,11 +17,11 @@
 
 #pragma once
 
-struct mem_arena;
+struct Mem_Arena;
 
-mem_arena* arena_create(unsigned size);
-void arena_destroy(mem_arena* arena);
-void arena_clear(mem_arena* arena);
-void* arena_alloc(mem_arena* arena, unsigned size);
-unsigned arena_used(mem_arena* arena);
-unsigned arena_size(mem_arena* arena);
+Mem_Arena* Arena_Create(unsigned size);
+void Arena_Destroy(Mem_Arena* arena);
+void Arena_Clear(Mem_Arena* arena);
+void* Arena_Alloc(Mem_Arena* arena, unsigned size);
+unsigned Arena_Used(Mem_Arena* arena);
+unsigned Arena_Size(Mem_Arena* arena);

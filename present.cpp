@@ -80,7 +80,7 @@ struct present_slide {
 
 struct present_file {
     const char* path;
-    mem_arena* mem;
+    Mem_Arena* mem;
     
     unsigned title_len;
     const char* title;
@@ -179,7 +179,7 @@ static bool is_directive(const char** dirout, unsigned* dirlen, const char* buf,
 
 static void append_slide(present_file* file, parse_state* state) {
     assert(file && state);
-    present_slide* next_slide = (present_slide*)arena_alloc(file->mem, sizeof(present_slide));
+    present_slide* next_slide = (present_slide*)Arena_Alloc(file->mem, sizeof(present_slide));
     next_slide->chapter_title = state->current_chapter_title;
     next_slide->chapter_title_len = state->current_chapter_title_len;
     next_slide->subtitle = NULL;
@@ -200,7 +200,7 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
     if(title_len == 0) {
         state->current_chapter_title = NULL;
     } else {
-        char* buf = (char*)arena_alloc(file->mem, title_len + 1);
+        char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
         memcpy(buf, title, title_len);
         buf[title_len] = 0;
         state->current_chapter_title = buf;
@@ -211,7 +211,7 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
 static void set_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     
-    char* buf = (char*)arena_alloc(file->mem, title_len + 1);
+    char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
     memcpy(buf, title, title_len);
     buf[title_len] = 0;
     file->title = buf;
@@ -221,7 +221,7 @@ static void set_title(present_file* file, parse_state* state, const char* title,
 static void set_authors(present_file* file, parse_state* state, const char* authors, unsigned authors_len) {
     assert(file && state && authors);
     
-    char* buf = (char*)arena_alloc(file->mem, authors_len + 1);
+    char* buf = (char*)Arena_Alloc(file->mem, authors_len + 1);
     memcpy(buf, authors, authors_len);
     buf[authors_len] = 0;
     
@@ -346,7 +346,7 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
     assert(slide);
-    node = (list_node_image*)arena_alloc(file->mem, sizeof(list_node_image));
+    node = (list_node_image*)Arena_Alloc(file->mem, sizeof(list_node_image));
     node->hdr.type = LNODE_IMAGE;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->alignment = alignment;
@@ -356,7 +356,7 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     
     if(p_realpath(path, full_path_buf)) {
         unsigned len = (unsigned)strlen(full_path_buf);
-        node->path = (char*)arena_alloc(file->mem, len + 1);
+        node->path = (char*)Arena_Alloc(file->mem, len + 1);
         node->path_len = len;
         memcpy((char*)node->path, full_path_buf, len + 1);
     } else {
@@ -401,7 +401,7 @@ static void set_subtitle(present_file* file, parse_state* state, const char* tit
     }
     assert(slide);
     slide->subtitle_len = title_len;
-    char* buf = (char*)arena_alloc(file->mem, title_len + 1);
+    char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
     memcpy(buf, title, title_len);
     buf[title_len] = 0;
     slide->subtitle = buf;
@@ -413,11 +413,11 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
     assert(slide);
-    auto node = (list_node_text*)arena_alloc(file->mem, sizeof(list_node_text));
+    auto node = (list_node_text*)Arena_Alloc(file->mem, sizeof(list_node_text));
     node->hdr.type = LNODE_TEXT;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->text_length = linelen;
-    char* buf = (char*)arena_alloc(file->mem, linelen + 1);
+    char* buf = (char*)Arena_Alloc(file->mem, linelen + 1);
     memcpy(buf, line, linelen);
     buf[linelen] = 0;
     node->text = buf;
@@ -457,7 +457,7 @@ static void set_font(present_file* file, const char** dst, const char* name, uns
         if(*dst) {
             fprintf(stderr, "Note: font was set multiple times!\n");
         }
-        buf = (char*)arena_alloc(file->mem, name_len + 1);
+        buf = (char*)Arena_Alloc(file->mem, name_len + 1);
         memcpy(buf, name, name_len);
         buf[name_len] = 0;
         *dst = buf;
@@ -586,7 +586,7 @@ present_file* present_open(const char* filename) {
             ret = (present_file*)malloc(sizeof(present_file));
             if(ret) {
                 ret->path = filename;
-                ret->mem = arena_create(PF_MEM_SIZE);
+                ret->mem = Arena_Create(PF_MEM_SIZE);
                 ret->title = NULL;
                 ret->authors = NULL;
                 ret->slide_count = 1; // implicit title slide
@@ -597,14 +597,14 @@ present_file* present_open(const char* filename) {
                 SET_RGB(ret->color_bg_header, 43, 203, 186);
                 SET_RGB(ret->color_fg_header, 255, 255, 255);
                 if(!parse_file(ret, f)) {
-                    arena_destroy(ret->mem);
+                    Arena_Destroy(ret->mem);
                     free(ret);
                     ret = NULL;
                     
                     fprintf(stderr, "Presentation parse error!\n");
                 } else {
-                    auto mmused = arena_used(ret->mem);
-                    auto mmsize = arena_size(ret->mem);
+                    auto mmused = Arena_Used(ret->mem);
+                    auto mmsize = Arena_Size(ret->mem);
                     auto mmperc = (float)mmused / (float)mmsize;
                     fprintf(stderr, "Presentation uses %u / %u bytes of memory (%f%%)\n", mmused, mmsize, mmperc * 100);
                 }
@@ -741,7 +741,7 @@ static void process_list_element(present_file* file, Present_List_Node* node, Re
             pixbuf = stbi_load(img->path, &w, &h, &channels, STBI_rgb_alpha);
             if(pixbuf) {
                 unsigned pixbuf_siz = sizeof(stbi_uc) * w * h * 4;
-                pixbuf_final = arena_alloc(rq->mem, pixbuf_siz);
+                pixbuf_final = Arena_Alloc(rq->mem, pixbuf_siz);
                 memcpy(pixbuf_final, pixbuf, pixbuf_siz);
                 if(DisplaySwapRedBlueChannels()) {
                     swap_red_blue_channels((uint8_t*)pixbuf_final, w, h);
@@ -825,7 +825,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     
     cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
     int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
-    cmd->text = (char*)arena_alloc(rq->mem, slide_num_len + 1);
+    cmd->text = (char*)Arena_Alloc(rq->mem, slide_num_len + 1);
     cmd->text_len = slide_num_len;
     snprintf((char*)cmd->text, cmd->text_len + 1, "%d / %d", file->current_slide, file->slide_count);
     cmd->x = VIRTUAL_X(1280 - 50);

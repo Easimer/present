@@ -27,7 +27,7 @@ Render_Queue* RQ_Alloc() {
     
     ret = (Render_Queue*)malloc(sizeof(Render_Queue));
     if(ret) {
-        ret->mem = arena_create(RQ_ARENA_SIZE);
+        ret->mem = Arena_Create(RQ_ARENA_SIZE);
         ret->commands = ret->last = NULL;
     }
     
@@ -37,7 +37,7 @@ Render_Queue* RQ_Alloc() {
 void RQ_Free(Render_Queue* rq) {
     assert(rq);
     if(rq) {
-        arena_destroy(rq->mem);
+        Arena_Destroy(rq->mem);
         free(rq);
     }
 }
@@ -45,7 +45,7 @@ void RQ_Free(Render_Queue* rq) {
 void RQ_Clear(Render_Queue* rq) {
     assert(rq);
     if(rq) {
-        arena_clear(rq->mem);
+        Arena_Clear(rq->mem);
         rq->commands = NULL;
         rq->last = NULL;
     }
@@ -55,7 +55,7 @@ void* RQ_New_Cmd(Render_Queue* rq, unsigned size) {
     void* ret = NULL;
     assert(rq && size > 0);
     if(rq && size > 0) {
-        ret = arena_alloc(rq->mem, size);
+        ret = Arena_Alloc(rq->mem, size);
         RQ_Draw_Cmd* hdr = (RQ_Draw_Cmd*)ret;
         hdr->cmd = RQCMD_INVALID;
         hdr->next = NULL;

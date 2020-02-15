@@ -70,7 +70,7 @@ struct RQ_Draw_Rect {
 
 // Render queue
 struct Render_Queue {
-    mem_arena* mem;
+    Mem_Arena* mem;
     
     RQ_Draw_Cmd* commands;
     RQ_Draw_Cmd* last;
