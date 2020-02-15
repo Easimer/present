@@ -36,7 +36,7 @@ struct Display {
     cairo_t* cr;
 };
 
-static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
+static xcb_visualtype_t *FindVisual(xcb_connection_t *c, xcb_visualid_t visual)
 {
     xcb_screen_iterator_t screen_iter = xcb_setup_roots_iterator(xcb_get_setup(c));
     
@@ -90,7 +90,7 @@ Display* Display_Open() {
         xcb_map_window(conn, wnd);
         xcb_flush(conn);
         
-        visual = find_visual(conn, scr->root_visual);
+        visual = FindVisual(conn, scr->root_visual);
         
         // load a font
         font = xcb_generate_id(conn);

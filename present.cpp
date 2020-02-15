@@ -106,7 +106,7 @@ struct Present_File {
     RGBA_Color color_fg_header;
 };
 
-struct parse_state {
+struct Parse_State {
     present_slide* first;
     present_slide* last;
     
@@ -114,7 +114,7 @@ struct parse_state {
     const char* current_chapter_title;
 };
 
-static unsigned read_line(char* buf, unsigned bufsiz, unsigned* indent_level, FILE* f) {
+static unsigned ReadLine(char* buf, unsigned bufsiz, unsigned* indent_level, FILE* f) {
     unsigned ret = 0;
     unsigned i = 0;
     char c = 0;
@@ -153,7 +153,7 @@ static unsigned read_line(char* buf, unsigned bufsiz, unsigned* indent_level, FI
 
 // dir, dirlen are outputs
 // buf, buflen are inputs
-static bool is_directive(const char** dirout, unsigned* dirlen, const char* buf, unsigned buflen) {
+static bool IsDirective(const char** dirout, unsigned* dirlen, const char* buf, unsigned buflen) {
     bool ret = false;
     unsigned len;
     const char* dir;
@@ -177,7 +177,7 @@ static bool is_directive(const char** dirout, unsigned* dirlen, const char* buf,
     return ret;
 }
 
-static void append_slide(Present_File* file, parse_state* state) {
+static void AppendSlide(Present_File* file, Parse_State* state) {
     assert(file && state);
     present_slide* next_slide = (present_slide*)Arena_Alloc(file->mem, sizeof(present_slide));
     next_slide->chapter_title = state->current_chapter_title;
@@ -194,7 +194,7 @@ static void append_slide(Present_File* file, parse_state* state) {
     file->slide_count++;
 }
 
-static void set_chapter_title(Present_File* file, parse_state* state, const char* title, unsigned title_len) {
+static void SetChapterTitle(Present_File* file, Parse_State* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     
     if(title_len == 0) {
@@ -208,7 +208,7 @@ static void set_chapter_title(Present_File* file, parse_state* state, const char
     }
 }
 
-static void set_title(Present_File* file, parse_state* state, const char* title, unsigned title_len) {
+static void SetTitle(Present_File* file, Parse_State* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     
     char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
@@ -218,7 +218,7 @@ static void set_title(Present_File* file, parse_state* state, const char* title,
     file->title_len = title_len;
 }
 
-static void set_authors(Present_File* file, parse_state* state, const char* authors, unsigned authors_len) {
+static void SetAuthors(Present_File* file, Parse_State* state, const char* authors, unsigned authors_len) {
     assert(file && state && authors);
     
     char* buf = (char*)Arena_Alloc(file->mem, authors_len + 1);
@@ -232,7 +232,7 @@ static void set_authors(Present_File* file, parse_state* state, const char* auth
 #if _WIN32
 #define WIN32_MEAN_AND_LEAN
 #include <Windows.h>
-inline int p_chdir(const char* path) {
+inline int P_Chdir(const char* path) {
     int ret = 0;
     BOOL res;
     
@@ -245,7 +245,7 @@ inline int p_chdir(const char* path) {
     return ret;
 }
 
-inline char* p_getcwd(char* buf, size_t size) {
+inline char* P_Getcwd(char* buf, size_t size) {
     char* ret = NULL;
     DWORD res;
     
@@ -260,7 +260,7 @@ inline char* p_getcwd(char* buf, size_t size) {
 
 #define PATH_MAX MAX_PATH
 
-inline char* p_realpath(const char* path, char buf[PATH_MAX]) {
+inline char* P_Realpath(const char* path, char buf[PATH_MAX]) {
     char* ret = NULL;
     if(GetFullPathNameA(path, PATH_MAX, buf, NULL) > 0) {
         ret = buf;
@@ -269,26 +269,26 @@ inline char* p_realpath(const char* path, char buf[PATH_MAX]) {
 }
 #else
 #include <unistd.h>
-inline int p_chdir(const char* path) {
+inline int P_Chdir(const char* path) {
     return chdir(path);
 }
 
-inline char* p_getcwd(char* buf, size_t size) {
+inline char* P_Getcwd(char* buf, size_t size) {
     return getcwd(buf, size);
 }
 
-inline char* p_realpath(const char* path, char buf[PATH_MAX]) {
+inline char* P_Realpath(const char* path, char buf[PATH_MAX]) {
     return realpath(path, buf);
 }
 #endif
 
-static void save_workdir(char** dst) {
+static void SaveWorkDir(char** dst) {
     assert(dst);
     char *buf = NULL, *res = NULL;
     int bufsiz = 64;
     while(!buf) {
         buf = (char*)malloc(bufsiz);
-        res = p_getcwd(buf, bufsiz);
+        res = P_Getcwd(buf, bufsiz);
         if(!res) {
             free(buf);
             buf = NULL;
@@ -298,17 +298,17 @@ static void save_workdir(char** dst) {
     *dst = buf;
 }
 
-static void restore_workdir(char** path) {
+static void RestoreWorkDir(char** path) {
     int res;
     assert(path && *path);
-    res = p_chdir(*path);
+    res = P_Chdir(*path);
     *path = NULL;
     if(res) {
         fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
     }
 }
 
-static void change_to_dir_of_file(const char* path) {
+static void ChangeToDirOfFile(const char* path) {
     int res;
     size_t len = strlen(path);
     char* buf = (char*)malloc(len + 1);
@@ -317,7 +317,7 @@ static void change_to_dir_of_file(const char* path) {
     while(buf[--i] != '/' && i > 0);
     if(i != 0) {
         buf[++i] = 0;
-        res = p_chdir(buf);
+        res = P_Chdir(buf);
         buf[i] = '/';
         if(res) {
             fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
@@ -325,7 +325,7 @@ static void change_to_dir_of_file(const char* path) {
     }
 }
 
-static void swap_red_blue_channels(uint8_t* rgba_buffer, unsigned width, unsigned height) {
+static void SwapRedBlueChannels(uint8_t* rgba_buffer, unsigned width, unsigned height) {
     for(unsigned y = 0; y < height; y++) {
         for(unsigned x = 0; x < width; x++) {
             auto& c0 = rgba_buffer[y * width * 4 + x * 4 + 0];
@@ -337,7 +337,7 @@ static void swap_red_blue_channels(uint8_t* rgba_buffer, unsigned width, unsigne
     }
 }
 
-static void add_inline_image(Present_File* file, parse_state* state, int indent_level, const char* path, unsigned path_len, Image_Alignment alignment) {
+static void AddInlineImage(Present_File* file, Parse_State* state, int indent_level, const char* path, unsigned path_len, Image_Alignment alignment) {
     char* prev_workdir = NULL;
     list_node_image* node;
     char full_path_buf[PATH_MAX];
@@ -351,10 +351,10 @@ static void add_inline_image(Present_File* file, parse_state* state, int indent_
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->alignment = alignment;
     
-    save_workdir(&prev_workdir);
-    change_to_dir_of_file(file->path);
+    SaveWorkDir(&prev_workdir);
+    ChangeToDirOfFile(file->path);
     
-    if(p_realpath(path, full_path_buf)) {
+    if(P_Realpath(path, full_path_buf)) {
         unsigned len = (unsigned)strlen(full_path_buf);
         node->path = (char*)Arena_Alloc(file->mem, len + 1);
         node->path_len = len;
@@ -364,7 +364,7 @@ static void add_inline_image(Present_File* file, parse_state* state, int indent_
         node->path = NULL;
     }
     
-    restore_workdir(&prev_workdir);
+    RestoreWorkDir(&prev_workdir);
     
     if(slide->content_cur) {
         if(slide->current_indent_level < indent_level) {
@@ -393,7 +393,7 @@ static void add_inline_image(Present_File* file, parse_state* state, int indent_
     //fprintf(stderr, "Appended image '%.*s'\n", path_len, path);
 }
 
-static void set_subtitle(Present_File* file, parse_state* state, const char* title, unsigned title_len) {
+static void SetSubtitle(Present_File* file, Parse_State* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     auto slide = state->last;
     if(!slide) {
@@ -407,7 +407,7 @@ static void set_subtitle(Present_File* file, parse_state* state, const char* tit
     slide->subtitle = buf;
 }
 
-static void append_to_list(Present_File* file, parse_state* state, int indent_level, const char* line, unsigned linelen) {
+static void AppendToList(Present_File* file, Parse_State* state, int indent_level, const char* line, unsigned linelen) {
     auto slide = state->last;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
@@ -450,7 +450,7 @@ static void append_to_list(Present_File* file, parse_state* state, int indent_le
     //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
 }
 
-static void set_font(Present_File* file, const char** dst, const char* name, unsigned name_len) {
+static void SetFont(Present_File* file, const char** dst, const char* name, unsigned name_len) {
     char* buf;
     assert(file && dst && name && name_len > 0);
     if(file && dst && name && name_len > 0) {
@@ -464,7 +464,7 @@ static void set_font(Present_File* file, const char** dst, const char* name, uns
     }
 }
 
-static void set_color(Present_File* file, RGBA_Color* dst, const char* col, unsigned col_len) {
+static void SetColor(Present_File* file, RGBA_Color* dst, const char* col, unsigned col_len) {
     assert(file && dst && col && col_len > 0);
     if(file && dst && col && col_len > 0) {
         if(col_len < 7) {
@@ -494,7 +494,7 @@ static void set_color(Present_File* file, RGBA_Color* dst, const char* col, unsi
     }
 }
 
-static bool parse_file(Present_File* file, FILE* f) {
+static bool ParseFile(Present_File* file, FILE* f) {
     bool ret = true;
     unsigned line_length;
     char line_buf[512];
@@ -505,7 +505,7 @@ static bool parse_file(Present_File* file, FILE* f) {
     unsigned directive_len;
     const char* directive_arg;
     unsigned directive_arg_len;
-    parse_state pstate;
+    Parse_State pstate;
     
     pstate.first = pstate.last = NULL;
     
@@ -514,13 +514,13 @@ static bool parse_file(Present_File* file, FILE* f) {
     file->font_general = file->font_title = file->font_chapter = NULL;
     
     // First line must be a '#PRESENT'
-    line_length = read_line(line_buf, line_siz, &indent_level, f);
-    if(line_length && is_directive(&directive, &directive_len, line_buf, line_length)) {
+    line_length = ReadLine(line_buf, line_siz, &indent_level, f);
+    if(line_length && IsDirective(&directive, &directive_len, line_buf, line_length)) {
         if(strncmp(directive, "PRESENT", directive_len) == 0) {
             while(!feof(f)) {
-                line_length = read_line(line_buf, line_siz, &indent_level, f);
+                line_length = ReadLine(line_buf, line_siz, &indent_level, f);
                 if(line_length) {
-                    if(is_directive(&directive, &directive_len, line_buf, line_length)) {
+                    if(IsDirective(&directive, &directive_len, line_buf, line_length)) {
                         // Calculate directive argument ptr and len
                         directive_arg = directive + directive_len + 1;
                         directive_arg_len = line_length - directive_len - 1;
@@ -529,39 +529,39 @@ static bool parse_file(Present_File* file, FILE* f) {
                         }
                         
                         if(strncmp(directive, "SLIDE", directive_len) == 0) {
-                            append_slide(file, &pstate);
+                            AppendSlide(file, &pstate);
                         } else if(strncmp(directive, "SUBTITLE", directive_len) == 0) {
-                            set_subtitle(file, &pstate, directive_arg, directive_arg_len);
+                            SetSubtitle(file, &pstate, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "INLINE_IMAGE", directive_len) == 0) {
-                            add_inline_image(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_INLINE);
+                            AddInlineImage(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_INLINE);
                         } else if(strncmp(directive, "RIGHT_IMAGE", directive_len) == 0) {
-                            add_inline_image(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_RIGHT);
+                            AddInlineImage(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_RIGHT);
                         } else if(strncmp(directive, "CHAPTER", directive_len) == 0) {
-                            set_chapter_title(file, &pstate, directive_arg, directive_arg_len);
+                            SetChapterTitle(file, &pstate, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "TITLE", directive_len) == 0) {
-                            set_title(file, &pstate, directive_arg, directive_arg_len);
+                            SetTitle(file, &pstate, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "AUTHORS", directive_len) == 0) {
-                            set_authors(file, &pstate, directive_arg, directive_arg_len);
+                            SetAuthors(file, &pstate, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "FONT", directive_len) == 0) {
-                            set_font(file, &file->font_general, directive_arg, directive_arg_len);
+                            SetFont(file, &file->font_general, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "FONT_TITLE", directive_len) == 0) {
-                            set_font(file, &file->font_title, directive_arg, directive_arg_len);
+                            SetFont(file, &file->font_title, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "FONT_CHAPTER", directive_len) == 0) {
-                            set_font(file, &file->font_chapter, directive_arg, directive_arg_len);
+                            SetFont(file, &file->font_chapter, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "COLOR_BG", directive_len) == 0) {
-                            set_color(file, &file->color_bg, directive_arg, directive_arg_len);
+                            SetColor(file, &file->color_bg, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "COLOR_FG", directive_len) == 0) {
-                            set_color(file, &file->color_fg, directive_arg, directive_arg_len);
+                            SetColor(file, &file->color_fg, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "COLOR_BG_HEADER", directive_len) == 0) {
-                            set_color(file, &file->color_bg_header, directive_arg, directive_arg_len);
+                            SetColor(file, &file->color_bg_header, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "COLOR_FG_HEADER", directive_len) == 0) {
-                            set_color(file, &file->color_fg_header, directive_arg, directive_arg_len);
+                            SetColor(file, &file->color_fg_header, directive_arg, directive_arg_len);
                         } else {
                             fprintf(stderr, "Warning: unknown directive: '%.*s'\n",
                                     directive_len, directive);
                         }
                     } else {
-                        append_to_list(file, &pstate, indent_level, line_buf, line_length);
+                        AppendToList(file, &pstate, indent_level, line_buf, line_length);
                     }
                 }
             }
@@ -596,7 +596,7 @@ Present_File* Present_Open(const char* filename) {
                 SET_RGB(ret->color_fg, 0, 0, 0);
                 SET_RGB(ret->color_bg_header, 43, 203, 186);
                 SET_RGB(ret->color_fg_header, 255, 255, 255);
-                if(!parse_file(ret, f)) {
+                if(!ParseFile(ret, f)) {
                     Arena_Destroy(ret->mem);
                     free(ret);
                     ret = NULL;
@@ -744,7 +744,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                 pixbuf_final = Arena_Alloc(rq->mem, pixbuf_siz);
                 memcpy(pixbuf_final, pixbuf, pixbuf_siz);
                 if(Display_SwapRedBlueChannels()) {
-                    swap_red_blue_channels((uint8_t*)pixbuf_final, w, h);
+                    SwapRedBlueChannels((uint8_t*)pixbuf_final, w, h);
                 }
                 stbi_image_free(pixbuf);
                 pixbuf = NULL;
