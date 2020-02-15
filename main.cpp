@@ -22,9 +22,9 @@
 #include "render_queue.h"
 
 static void render_loop(const char* filename) {
-    display* disp;
+    Display* disp;
     present_file* file;
-    display_event ev;
+    Display_Event ev;
     bool requested_exit = false;
     render_queue* rq = NULL;
     
@@ -32,13 +32,13 @@ static void render_loop(const char* filename) {
     file = present_open(filename);
     if(file) {
         // Open a window
-        disp = display_open();
+        disp = DisplayOpen();
         if(disp) {
             // Loop until the presentation is over or
             // the user has requested an exit (by pressing ESC)
             while(!present_over(file) && !requested_exit) {
                 // Wait for an event
-                if(display_fetch_event(disp, &ev)) {
+                if(DisplayFetchEvent(disp, ev)) {
                     int f;
                     switch(ev) {
                         case DISPEV_PREV:
@@ -67,17 +67,17 @@ static void render_loop(const char* filename) {
                     // Only re-render if something happened
                     present_fill_render_queue(file, rq);
                     // Display render queue
-                    display_render_queue(disp, rq);
+                    DisplayRenderQueue(disp, rq);
                     // Free render queue
                     rq_free(rq);
                     // NOTE(easimer): previously we allocated an RQ once at startup
-                    // then used it at every redraw, clearing it after the 
-                    // display_render_queue call. But due to images, render queues
+                    // then used that at every redraw, clearing it after the 
+                    // DisplayRenderQueue call. But due to images, render queues
                     // can get quite large and we don't want to hold megabytes of memory 
                     // hostage while not even using it.
                 }
             }
-            display_close(disp);
+            DisplayClose(disp);
         }
         present_close(file);
     }

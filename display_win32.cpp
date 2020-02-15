@@ -16,7 +16,7 @@ using namespace Gdiplus;
 // WPARAM and LPARAM are always zero.
 #define WM_JUMPSTART (WM_USER + 0x0000)
 
-struct display {
+struct Display {
     HWND wnd;
     
     GdiplusStartupInput gdiplusStartupInput;
@@ -28,12 +28,12 @@ struct display {
     
     // For WndProc
     HDC backdc;
-    display_event* ev_out;
+    Display_Event* ev_out;
     bool ev_res;
     render_queue* rq;
 };
 
-static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const render_queue* rq) {
+static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const render_queue* rq) {
     assert(rClient && rq);
     
     rq_draw_cmd* cur = rq->commands;
@@ -139,7 +139,7 @@ static void process_render_queue(display* disp, HWND hWnd, HDC hDC, const RECT* 
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    display* disp = (display*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    Display* disp = (Display*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
     switch(uMsg) {
         case WM_CREATE: {
             CREATESTRUCT *pCreate = (CREATESTRUCT*)lParam;
@@ -164,7 +164,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             if(disp->rq) {
                 hdc = BeginPaint(disp->wnd, &ps);
                 GetClientRect(disp->wnd, &r);
-                process_render_queue(disp, hWnd, hdc, &r, disp->rq);
+                ProcessRenderQueue(disp, hWnd, hdc, &r, disp->rq);
                 EndPaint(disp->wnd, &ps);
             }
             break;
@@ -226,10 +226,10 @@ static BOOL CALLBACK MonitorEnumerationProc(HMONITOR hMonitor, HDC hDC, LPRECT r
     MONITORINFO minf;
     minf.cbSize = sizeof(minf);
     auto res = (Monitor_Enumeration_Result*)lParam;
-
+    
     res->headless = false;
     assert(hMonitor != NULL);
-
+    
     if (GetMonitorInfoA(hMonitor, &minf)) {
         if ((minf.dwFlags & MONITORINFOF_PRIMARY) == 0) {
             // Found a non-primary display
@@ -248,23 +248,23 @@ static BOOL CALLBACK MonitorEnumerationProc(HMONITOR hMonitor, HDC hDC, LPRECT r
     } else {
         fprintf(stderr, "display_win32: GetMonitorInfo has failed\n");
     }
-
+    
     return TRUE;
 }
 
-struct display* display_open() {
-    display* ret = NULL;
+struct Display* DisplayOpen() {
+    Display* ret = NULL;
     WNDCLASSA wc = {0};
     LONG win_x = -1, win_y = -1, win_w = -1, win_h = -1;
     Monitor_Enumeration_Result monenum;
-
+    
     if (EnumDisplayMonitors(NULL, NULL, MonitorEnumerationProc, (LPARAM)&monenum)) {
         if (!monenum.headless && monenum.hMonitor) {
             win_x = monenum.rect.left;
             win_y = monenum.rect.top;
             win_w = monenum.rect.right - monenum.rect.left;
             win_h = monenum.rect.bottom - monenum.rect.top;
-            ret = (display*)malloc(sizeof(display));
+            ret = (Display*)malloc(sizeof(Display));
         } else {
             fprintf(stdout, "display_win32: couldn't find displays\n");
         }
@@ -304,7 +304,7 @@ struct display* display_open() {
     return ret;
 }
 
-void display_close(display* disp) {
+void DisplayClose(Display* disp) {
     if(disp) {
         DeleteObject(disp->penInvis);
         DeleteObject(disp->penBlack);
@@ -313,13 +313,13 @@ void display_close(display* disp) {
     }
 }
 
-bool display_fetch_event(display* disp, display_event* out) {
+bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     MSG msg;
     bool ret = false;
     
     if(disp) {
         disp->ev_res = false;
-        disp->ev_out = out;
+        disp->ev_out = &out;
         if(PeekMessageA(&msg, disp->wnd, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -329,7 +329,7 @@ bool display_fetch_event(display* disp, display_event* out) {
     return ret;
 }
 
-void display_render_queue(display* disp, render_queue* rq) {
+void DisplayRenderQueue(Display* disp, render_queue* rq) {
     MSG msg = {0};
     
     if(disp && rq) {
@@ -341,6 +341,6 @@ void display_render_queue(display* disp, render_queue* rq) {
     }
 }
 
-bool display_swap_red_blue_channels() {
+bool DisplaySwapRedBlueChannels() {
     return true;
 }

@@ -220,7 +220,7 @@ static void set_title(present_file* file, parse_state* state, const char* title,
 
 static void set_authors(present_file* file, parse_state* state, const char* authors, unsigned authors_len) {
     assert(file && state && authors);
-
+    
     char* buf = (char*)arena_alloc(file->mem, authors_len + 1);
     memcpy(buf, authors, authors_len);
     buf[authors_len] = 0;
@@ -743,7 +743,7 @@ static void process_list_element(present_file* file, present_list_node* node, re
                 unsigned pixbuf_siz = sizeof(stbi_uc) * w * h * 4;
                 pixbuf_final = arena_alloc(rq->mem, pixbuf_siz);
                 memcpy(pixbuf_final, pixbuf, pixbuf_siz);
-                if(display_swap_red_blue_channels()) {
+                if(DisplaySwapRedBlueChannels()) {
                     swap_red_blue_channels((uint8_t*)pixbuf_final, w, h);
                 }
                 stbi_image_free(pixbuf);
@@ -752,24 +752,24 @@ static void process_list_element(present_file* file, present_list_node* node, re
                 cmd->width = w;
                 cmd->height = h;
                 cmd->buffer = pixbuf_final;
-
+                
                 switch(img->alignment) {
                     case IMGALIGN_RIGHT:
-                        cmd->x = 1 - VIRTUAL_X(w);
-                        if(cmd->x < 0) {
-                            cmd->x = 0.25f;
-                            fprintf(stderr, "Warning: image '%s' is too wide to fit on the screen!\n", img->path);
-                        }
-                        cmd->y = VIRTUAL_Y(state.right_y);
-                        state.right_y += cmd->height;
-                        break;
+                    cmd->x = 1 - VIRTUAL_X(w);
+                    if(cmd->x < 0) {
+                        cmd->x = 0.25f;
+                        fprintf(stderr, "Warning: image '%s' is too wide to fit on the screen!\n", img->path);
+                    }
+                    cmd->y = VIRTUAL_Y(state.right_y);
+                    state.right_y += cmd->height;
+                    break;
                     default:
-                        fprintf(stderr, "Unimplemented image alignment %d\n", img->alignment);
+                    fprintf(stderr, "Unimplemented image alignment %d\n", img->alignment);
                     case IMGALIGN_INLINE:
-                        cmd->x = 0;
-                        cmd->y = VIRTUAL_Y(state.y);
-                        state.y += cmd->height;
-                        break;
+                    cmd->x = 0;
+                    cmd->y = VIRTUAL_Y(state.y);
+                    state.y += cmd->height;
+                    break;
                 }
                 
                 assert(cmd->buffer);

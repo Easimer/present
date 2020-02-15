@@ -24,7 +24,7 @@
 #include <cairo-xcb.h>
 #include "display.h"
 
-struct display {
+struct Display {
     xcb_connection_t* conn;
     xcb_screen_t* scr;
     xcb_drawable_t wnd;
@@ -53,9 +53,9 @@ static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
     return NULL;
 }
 
-display* display_open() {
+Display* DisplayOpen() {
     const char* font_name = "-misc-fixed-*-*-*-*-20-*-*-*-*-*-iso8859-2";
-    display* ret = NULL;
+    Display* ret = NULL;
     unsigned int values[3] = {0, 0};
     xcb_connection_t* conn;
     xcb_screen_t* scr;
@@ -65,7 +65,7 @@ display* display_open() {
     xcb_visualtype_t* visual;
     unsigned int mask = XCB_GC_FOREGROUND | XCB_GC_GRAPHICS_EXPOSURES;
     
-    ret = (display*)malloc(sizeof(display));
+    ret = (Display*)malloc(sizeof(Display));
     if(ret) {
         conn = xcb_connect(NULL, NULL);
         scr = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
@@ -126,7 +126,7 @@ display* display_open() {
     return ret;
 }
 
-void display_close(display* disp) {
+void DisplayClose(Display* disp) {
     assert(disp);
     if(disp) {
         if(disp->conn) {
@@ -140,7 +140,7 @@ void display_close(display* disp) {
     }
 }
 
-bool display_fetch_event(display* disp, display_event* out) {
+bool DisplayFetchEvent(Display* disp, Display_Event* out) {
     bool ret = false;
     xcb_generic_event_t *e;
     assert(disp && out && disp->conn);
@@ -204,7 +204,7 @@ bool display_fetch_event(display* disp, display_event* out) {
     return ret;
 }
 
-void display_render_queue(display* disp, render_queue* rq) {
+void DisplayRenderQueue(Display* disp, render_queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
         rq_draw_cmd* cur = rq->commands;
@@ -230,10 +230,10 @@ void display_render_queue(display* disp, render_queue* rq) {
                     cairo_surface_t* imgsurf;
                     cairo_save(disp->cr);
                     imgsurf = cairo_image_surface_create_for_data(
-                        (unsigned char*)dimg->buffer,
-                        CAIRO_FORMAT_ARGB32,
-                        dimg->width, dimg->height,
-                        dimg->width * 4);
+                                                                  (unsigned char*)dimg->buffer,
+                                                                  CAIRO_FORMAT_ARGB32,
+                                                                  dimg->width, dimg->height,
+                                                                  dimg->width * 4);
                     cairo_set_source_surface(disp->cr, imgsurf, dimg->x * disp->s_width, dimg->y * disp->s_height);
                     cairo_paint(disp->cr);
                     cairo_surface_destroy(imgsurf);
@@ -262,6 +262,6 @@ void display_render_queue(display* disp, render_queue* rq) {
     }
 }
 
-bool display_swap_red_blue_channels() {
+bool DisplaySwapRedBlueChannels() {
     return true;
 }
