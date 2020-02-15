@@ -143,7 +143,7 @@ void DisplayClose(Display* disp) {
 bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     bool ret = false;
     xcb_generic_event_t *e;
-    assert(disp && out && disp->conn);
+    assert(disp && disp->conn);
     if(disp) {
         e = xcb_wait_for_event(disp->conn);
         if(e) {
