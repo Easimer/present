@@ -204,10 +204,10 @@ bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     return ret;
 }
 
-void DisplayRenderQueue(Display* disp, render_queue* rq) {
+void DisplayRenderQueue(Display* disp, Render_Queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
-        rq_draw_cmd* cur = rq->commands;
+        RQ_Draw_Cmd* cur = rq->commands;
         
         // setup text drawing
         cairo_select_font_face(disp->cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
@@ -216,7 +216,7 @@ void DisplayRenderQueue(Display* disp, render_queue* rq) {
         while(cur) {
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
-                    rq_draw_text* dtxt = (rq_draw_text*)cur;
+                    RQ_Draw_Text* dtxt = (RQ_Draw_Text*)cur;
                     const char* font_name = dtxt->font_name ? dtxt->font_name : "sans-serif";
                     cairo_select_font_face(disp->cr, font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
                     cairo_set_font_size(disp->cr, dtxt->size * disp->s_height);
@@ -226,7 +226,7 @@ void DisplayRenderQueue(Display* disp, render_queue* rq) {
                     break;
                 }
                 case RQCMD_DRAW_IMAGE: {
-                    rq_draw_image* dimg = (rq_draw_image*)cur;
+                    RQ_Draw_Image* dimg = (RQ_Draw_Image*)cur;
                     cairo_surface_t* imgsurf;
                     cairo_save(disp->cr);
                     imgsurf = cairo_image_surface_create_for_data(
@@ -241,7 +241,7 @@ void DisplayRenderQueue(Display* disp, render_queue* rq) {
                     break;
                 }
                 case RQCMD_DRAW_RECTANGLE: {
-                    rq_draw_rect* drect = (rq_draw_rect*)cur;
+                    RQ_Draw_Rect* drect = (RQ_Draw_Rect*)cur;
                     int x, y, w, h;
                     x = drect->x0 * disp->s_width;
                     y = drect->y0 * disp->s_height;
