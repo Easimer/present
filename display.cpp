@@ -140,11 +140,11 @@ void DisplayClose(Display* disp) {
     }
 }
 
-bool DisplayFetchEvent(Display* disp, Display_Event* out) {
+bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     bool ret = false;
     xcb_generic_event_t *e;
     assert(disp && out && disp->conn);
-    if(disp && out) {
+    if(disp) {
         e = xcb_wait_for_event(disp->conn);
         if(e) {
             switch(e->response_type & ~0x80) {
@@ -156,16 +156,16 @@ bool DisplayFetchEvent(Display* disp, Display_Event* out) {
                     break;
                 }
                 case XCB_EXPOSE:
-                *out = DISPEV_NONE; // force redraw
+                out = DISPEV_NONE; // force redraw
                 ret = true;
                 break;
                 case XCB_BUTTON_RELEASE: {
                     xcb_button_release_event_t *ev = (xcb_button_release_event_t *)e;
                     ret = true;
                     if(ev->detail == 1) {
-                        *out = DISPEV_NEXT;
+                        out = DISPEV_NEXT;
                     } else if(ev->detail == 3) {
-                        *out = DISPEV_PREV;
+                        out = DISPEV_PREV;
                     } else {
                         ret = false;
                     }
@@ -176,20 +176,20 @@ bool DisplayFetchEvent(Display* disp, Display_Event* out) {
                     ret = true;
                     switch(ev->detail) {
                         case 9: // ESC
-                        *out = DISPEV_EXIT;
+                        out = DISPEV_EXIT;
                         break;
                         case 65: // SPACE
                         case 114: // right cursor
-                        *out = DISPEV_NEXT;
+                        out = DISPEV_NEXT;
                         break;
                         case 113: // left cursor
-                        *out = DISPEV_PREV;
+                        out = DISPEV_PREV;
                         break;
                         case 112: // Page up
-                        *out = DISPEV_START;
+                        out = DISPEV_START;
                         break;
                         case 117: // Page down
-                        *out = DISPEV_END;
+                        out = DISPEV_END;
                         break;
                         default:
                         ret = false;
