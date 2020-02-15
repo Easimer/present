@@ -45,22 +45,22 @@ enum Image_Alignment {
     IMGALIGN_MAX
 };
 
-struct present_list_node {
+struct Present_List_Node {
     list_node_type type;
-    present_list_node* next;
-    present_list_node* children;
-    present_list_node* parent; // this is not the prev->prev of next!
+    Present_List_Node* next;
+    Present_List_Node* children;
+    Present_List_Node* parent; // this is not the prev->prev of next!
 };
 
 struct list_node_text {
-    present_list_node hdr;
+    Present_List_Node hdr;
     
     unsigned text_length;
     const char* text;
 };
 
 struct list_node_image {
-    present_list_node hdr;
+    Present_List_Node hdr;
     int path_len;
     const char* path;
     Image_Alignment alignment;
@@ -73,8 +73,8 @@ struct present_slide {
     const char* subtitle; // optional
     present_slide* next;
     
-    present_list_node* content;
-    present_list_node* content_cur;
+    Present_List_Node* content;
+    Present_List_Node* content_cur;
     int current_indent_level;
 };
 
@@ -97,13 +97,13 @@ struct present_file {
     const char* font_general; // Font used for content text and as a fallback
     
     // color of slide background (default: 255, 255, 255)
-    rgba_color color_bg;
+    RGBA_Color color_bg;
     // color of slide text (default: 0, 0, 0)
-    rgba_color color_fg;
+    RGBA_Color color_fg;
     // color of slide header (default: 43, 203, 186)
-    rgba_color color_bg_header;
+    RGBA_Color color_bg_header;
     // color of slide header text (default: 255, 255, 255)
-    rgba_color color_fg_header;
+    RGBA_Color color_fg_header;
 };
 
 struct parse_state {
@@ -370,24 +370,24 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
         if(slide->current_indent_level < indent_level) {
             //fprintf(stderr, "Indent IN to %d from %d\n", indent_level, slide->current_indent_level);
             node->hdr.parent = slide->content_cur;
-            slide->content_cur->children = (present_list_node*)node;
-            slide->content_cur = (present_list_node*) node;
+            slide->content_cur->children = (Present_List_Node*)node;
+            slide->content_cur = (Present_List_Node*) node;
             slide->current_indent_level = indent_level;
         } else if(slide->current_indent_level > indent_level) {
             //fprintf(stderr, "Indent OUT to %d\n", indent_level);
             auto parent = slide->content_cur->parent;
             slide->content_cur = parent;
-            parent->next = (present_list_node*)node;
+            parent->next = (Present_List_Node*)node;
             slide->current_indent_level = indent_level;
         } else {
             //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
-            slide->content_cur->next = (present_list_node*)node;
+            slide->content_cur->next = (Present_List_Node*)node;
             node->hdr.parent = slide->content_cur->parent;
-            slide->content_cur = (present_list_node*)node;
+            slide->content_cur = (Present_List_Node*)node;
         }
     } else {
         //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
-        slide->content = slide->content_cur = (present_list_node*)node;
+        slide->content = slide->content_cur = (Present_List_Node*)node;
         slide->current_indent_level = indent_level;
     }
     //fprintf(stderr, "Appended image '%.*s'\n", path_len, path);
@@ -426,24 +426,24 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
         if(slide->current_indent_level < indent_level) {
             //fprintf(stderr, "Indent IN to %d\n", indent_level);
             node->hdr.parent = slide->content_cur;
-            slide->content_cur->children = (present_list_node*)node;
-            slide->content_cur = (present_list_node*) node;
+            slide->content_cur->children = (Present_List_Node*)node;
+            slide->content_cur = (Present_List_Node*) node;
             slide->current_indent_level = indent_level;
         } else if(slide->current_indent_level > indent_level) {
             //fprintf(stderr, "Indent OUT to %d\n", indent_level);
             auto parent = slide->content_cur->parent;
-            parent->next = (present_list_node*)node;
-            slide->content_cur = (present_list_node*)node;
+            parent->next = (Present_List_Node*)node;
+            slide->content_cur = (Present_List_Node*)node;
             slide->current_indent_level = indent_level;
         } else {
             //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
-            slide->content_cur->next = (present_list_node*)node;
+            slide->content_cur->next = (Present_List_Node*)node;
             node->hdr.parent = slide->content_cur->parent;
-            slide->content_cur = (present_list_node*)node;
+            slide->content_cur = (Present_List_Node*)node;
         }
     } else {
         //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
-        slide->content = slide->content_cur = (present_list_node*)node;
+        slide->content = slide->content_cur = (Present_List_Node*)node;
         slide->current_indent_level = indent_level;
     }
     
@@ -464,7 +464,7 @@ static void set_font(present_file* file, const char** dst, const char* name, uns
     }
 }
 
-static void set_color(present_file* file, rgba_color* dst, const char* col, unsigned col_len) {
+static void set_color(present_file* file, RGBA_Color* dst, const char* col, unsigned col_len) {
     assert(file && dst && col && col_len > 0);
     if(file && dst && col && col_len > 0) {
         if(col_len < 7) {
@@ -672,18 +672,18 @@ int present_seek_to(present_file* file, int abs) {
     return ret;
 }
 
-static void present_clear_screen(present_file* file, render_queue* rq, float r, float b, float g) {
-    auto rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
+static void present_clear_screen(present_file* file, Render_Queue* rq, float r, float b, float g) {
+    auto rect = RQ_New_Cmd<RQ_Draw_Rect>(rq, RQCMD_DRAW_RECTANGLE);
     rect->x0 = rect->y0 = 0;
     rect->x1 = rect->y1 = 1;
     rect->color.r = r; rect->color.g = g;
     rect->color.b = b; rect->color.a = 1;
 }
 
-static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
+static void present_fill_rq_title_slide(present_file* file, Render_Queue* rq) {
     present_clear_screen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
     if(file->title_len && file->title) {
-        auto title = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        auto title = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         title->x = VIRTUAL_X(24);
         title->y = VIRTUAL_Y((720 - 72) / 2);
         title->size = VIRTUAL_Y(72);
@@ -694,7 +694,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
     }
     
     if(file->authors_len && file->authors) {
-        auto authors = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        auto authors = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         authors->x = VIRTUAL_X(36);
         authors->y = VIRTUAL_Y((720 + 20) / 2);
         authors->size = VIRTUAL_Y(20);
@@ -705,7 +705,7 @@ static void present_fill_rq_title_slide(present_file* file, render_queue* rq) {
     }
 }
 
-static void present_fill_rq_end_slide(present_file* file, render_queue* rq) {
+static void present_fill_rq_end_slide(present_file* file, Render_Queue* rq) {
     // a filled rectangle covering the screen
     present_clear_screen(file, rq, 0, 0, 0);
 }
@@ -715,14 +715,14 @@ struct List_Processor_State {
     int right_y;
 };
 
-static void process_list_element(present_file* file, present_list_node* node, render_queue* rq,
+static void process_list_element(present_file* file, Present_List_Node* node, Render_Queue* rq,
                                  List_Processor_State& state) {
     auto cur = node;
     while(cur) {
         if(cur->type == LNODE_TEXT) {
-            rq_draw_text* cmd = NULL;
+            RQ_Draw_Text* cmd = NULL;
             list_node_text* text = (list_node_text*)cur;
-            cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+            cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = VIRTUAL_X(state.x);
             cmd->y = VIRTUAL_Y(state.y);
             cmd->size = VIRTUAL_Y(32);
@@ -732,11 +732,11 @@ static void process_list_element(present_file* file, present_list_node* node, re
             cmd->color = file->color_fg;
             state.y += 40;
         } else if(cur->type == LNODE_IMAGE) {
-            rq_draw_image* cmd = NULL;
+            RQ_Draw_Image* cmd = NULL;
             int w, h, channels;
             void *pixbuf, *pixbuf_final;
             list_node_image* img = (list_node_image*)cur;
-            cmd = rq_new_cmd<rq_draw_image>(rq, RQCMD_DRAW_IMAGE);
+            cmd = RQ_New_Cmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
             
             pixbuf = stbi_load(img->path, &w, &h, &channels, STBI_rgb_alpha);
             if(pixbuf) {
@@ -789,20 +789,20 @@ static void process_list_element(present_file* file, present_list_node* node, re
     state.x -= 24;
 }
 
-static void present_fill_rq_regular_slide(present_file* file, present_slide* slide, render_queue* rq) {
+static void present_fill_rq_regular_slide(present_file* file, present_slide* slide, Render_Queue* rq) {
     List_Processor_State lps = {8, 160, 80};
-    rq_draw_text* cmd = NULL;
-    rq_draw_rect* rect = NULL;
+    RQ_Draw_Text* cmd = NULL;
+    RQ_Draw_Rect* rect = NULL;
     
     present_clear_screen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
     
     if(slide->chapter_title) {
-        rect = rq_new_cmd<rq_draw_rect>(rq, RQCMD_DRAW_RECTANGLE);
+        rect = RQ_New_Cmd<RQ_Draw_Rect>(rq, RQCMD_DRAW_RECTANGLE);
         rect->x0 = 0; rect->y0 = 0;
         rect->x1 = 1; rect->y1 = VIRTUAL_Y(72);
         rect->color = file->color_bg_header;
         
-        cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10);
         cmd->y = VIRTUAL_Y(64);
         cmd->size = VIRTUAL_Y(64);
@@ -812,7 +812,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->color = file->color_fg_header;
     }
     if(slide->subtitle) {
-        cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+        cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10); cmd->y = VIRTUAL_Y(120);
         cmd->size = VIRTUAL_Y(44);
         cmd->text_len = slide->subtitle_len;
@@ -823,7 +823,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     
     process_list_element(file, slide->content, rq, lps);
     
-    cmd = rq_new_cmd<rq_draw_text>(rq, RQCMD_DRAW_TEXT);
+    cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
     int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
     cmd->text = (char*)arena_alloc(rq->mem, slide_num_len + 1);
     cmd->text_len = slide_num_len;
@@ -835,7 +835,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     cmd->font_name = file->font_general;
 }
 
-void present_fill_render_queue(present_file* file, render_queue* rq) {
+void present_fill_render_queue(present_file* file, Render_Queue* rq) {
     assert(file && rq);
     if(file && rq) {
         if(file->current_slide == 0) {

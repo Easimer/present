@@ -58,7 +58,7 @@ void DisplayClose(Display* display);
 bool DisplayFetchEvent(Display* display, Display_Event& out);
 
 // Draws a Render_Queue to the display.
-void DisplayRenderQueue(Display* display, render_queue* rq);
+void DisplayRenderQueue(Display* display, Render_Queue* rq);
 
 // Returns whether images queued to be drawn should
 // have their red and blue channels swapped.

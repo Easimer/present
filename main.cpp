@@ -26,7 +26,7 @@ static void render_loop(const char* filename) {
     present_file* file;
     Display_Event ev;
     bool requested_exit = false;
-    render_queue* rq = NULL;
+    Render_Queue* rq = NULL;
     
     // Open presentation file
     file = present_open(filename);
@@ -63,13 +63,13 @@ static void render_loop(const char* filename) {
                         break;
                     }
                     // Allocate an empty render buffer
-                    rq = rq_alloc();
+                    rq = RQ_Alloc();
                     // Only re-render if something happened
                     present_fill_render_queue(file, rq);
                     // Display render queue
                     DisplayRenderQueue(disp, rq);
                     // Free render queue
-                    rq_free(rq);
+                    RQ_Free(rq);
                     // NOTE(easimer): previously we allocated an RQ once at startup
                     // then used that at every redraw, clearing it after the 
                     // DisplayRenderQueue call. But due to images, render queues

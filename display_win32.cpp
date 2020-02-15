@@ -1,3 +1,19 @@
+// present
+// Copyright (C) 2019 Daniel Meszaros <easimer@gmail.com>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -30,13 +46,13 @@ struct Display {
     HDC backdc;
     Display_Event* ev_out;
     bool ev_res;
-    render_queue* rq;
+    Render_Queue* rq;
 };
 
-static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const render_queue* rq) {
+static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const Render_Queue* rq) {
     assert(rClient && rq);
     
-    rq_draw_cmd* cur = rq->commands;
+    RQ_Draw_Cmd* cur = rq->commands;
     HFONT fntCurrent = NULL;
     int font_size = 0;
     const char* font_name = NULL;
@@ -51,7 +67,7 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
     while(cur) {
         switch(cur->cmd) {
             case RQCMD_DRAW_TEXT: {
-                rq_draw_text* dtxt = (rq_draw_text*)cur;
+                RQ_Draw_Text* dtxt = (RQ_Draw_Text*)cur;
                 int r = (int)(dtxt->color.r * 255); int g = (int)(dtxt->color.g * 255);
                 int b = (int)(dtxt->color.b * 255);
                 int x = (int)(dtxt->x * disp->s_width);
@@ -79,7 +95,7 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 break;
             }
             case RQCMD_DRAW_IMAGE: {
-                rq_draw_image* dimg = (rq_draw_image*)cur;
+                RQ_Draw_Image* dimg = (RQ_Draw_Image*)cur;
                 int x = (int)(dimg->x * disp->s_width);
                 int y = (int)(dimg->y * disp->s_height);
                 int w = (int)(dimg->width);
@@ -115,7 +131,7 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 break;
             }
             case RQCMD_DRAW_RECTANGLE: {
-                rq_draw_rect* drect = (rq_draw_rect*)cur;
+                RQ_Draw_Rect* drect = (RQ_Draw_Rect*)cur;
                 int r = (int)(drect->color.r * 255); int g = (int)(drect->color.g * 255);
                 int b = (int)(drect->color.b * 255); //int a = (int)(drect->a * 255);
                 int x0 = (int)(drect->x0 * disp->s_width);
@@ -329,7 +345,7 @@ bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     return ret;
 }
 
-void DisplayRenderQueue(Display* disp, render_queue* rq) {
+void DisplayRenderQueue(Display* disp, Render_Queue* rq) {
     MSG msg = {0};
     
     if(disp && rq) {

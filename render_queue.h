@@ -17,63 +17,81 @@
 #pragma once
 #include "arena.h"
 
-enum rq_cmd {
+// Render command kind
+enum RQ_Cmd {
+    // Invalid command
     RQCMD_INVALID = 0,
+    // Draw text
     RQCMD_DRAW_TEXT,
+    // Draw an image
     RQCMD_DRAW_IMAGE,
+    // Draw a rectangle
     RQCMD_DRAW_RECTANGLE,
     RQCMD_MAX
 };
 
-struct rgba_color {
+// RGBA Color
+struct RGBA_Color {
     float r, g, b, a;
 };
 
-struct rq_draw_cmd {
-    rq_cmd cmd;
-    rq_draw_cmd* next;
+// Draw command - common fields
+struct RQ_Draw_Cmd {
+    RQ_Cmd cmd;
+    RQ_Draw_Cmd* next;
 };
 
-struct rq_draw_text {
-    rq_draw_cmd hdr;
+// Draw text command
+struct RQ_Draw_Text {
+    RQ_Draw_Cmd hdr;
     float x, y; // text position [0,1] normalized
     float size; // text height in percentage of screen height
     int text_len;
     const char* text;
-    rgba_color color;
+    RGBA_Color color;
     
     const char* font_name;
 };
 
-struct rq_draw_image {
-    rq_draw_cmd hdr;
-    float x, y;
-    int width, height;
+// Draw image command
+struct RQ_Draw_Image {
+    RQ_Draw_Cmd hdr;
+    float x, y; // position [0, 1] screen space
+    int width, height; // Image size in pixels
     void* buffer; // R8B8G8 format
 };
 
-struct rq_draw_rect {
-    rq_draw_cmd hdr;
+// Draw rectangle command
+struct RQ_Draw_Rect {
+    RQ_Draw_Cmd hdr;
     float x0, y0, x1, y1; // [0, 1] normalized ss coords
-    rgba_color color;
+    RGBA_Color color;
 };
 
-struct render_queue {
+// Render queue
+struct Render_Queue {
     mem_arena* mem;
     
-    rq_draw_cmd* commands;
-    rq_draw_cmd* last;
+    RQ_Draw_Cmd* commands;
+    RQ_Draw_Cmd* last;
 };
 
-render_queue* rq_alloc();
-void rq_free(render_queue* rq);
-void rq_clear(render_queue* rq);
-void* rq_new_cmd(render_queue* rq, unsigned size);
+// Tries to allocate a new render queue
+Render_Queue* RQ_Alloc();
+
+// Deallocates the render queue
+void RQ_Free(Render_Queue* rq);
+void RQ_Clear(Render_Queue* rq);
+// Creates a new command of a given size and appends it to the end of
+// the render queue.
+void* RQ_New_Cmd(Render_Queue* rq, unsigned size);
 
 #ifdef __cplusplus
+// Creates a new command of a given type and appends it to the end of
+// the render queue.
 template<typename T>
-inline T* rq_new_cmd(render_queue* rq, rq_cmd cmd = RQCMD_INVALID) {
-    T* ret = (T*)rq_new_cmd(rq, sizeof(T));
+inline T* RQ_New_Cmd(Render_Queue* rq, RQ_Cmd cmd = RQCMD_INVALID) {
+    T* ret = (T*)RQ_New_Cmd(rq, sizeof(T));
     
     ret->hdr.cmd = cmd;
     ret->hdr.next = NULL;
@@ -82,8 +100,17 @@ inline T* rq_new_cmd(render_queue* rq, rq_cmd cmd = RQCMD_INVALID) {
 }
 #endif
 
+// NOTE(easimer): most drawing commands specify sizes of things in term of percentage
+// of the screen size instead of pixels to ensure that they remain the same
+// size on all kinds of screen resolutions. But sometimes in code we need to say
+// things like 'I want this text to be 72px tall on a 720p screen!' For these
+// cases we have two macros: VIRTUAL_X and VIRTUAL_Y.
+// TODO(easimer): This doesn't work on 4:3 displays.
+// TODO(easimer): Images only partially use this system. They are not scaled.
+
 #define VIRTUAL_X(val) ((val) / 1280.0f)
 #define VIRTUAL_Y(val) ((val) / 720.0f)
+
 #define SET_RGB(aggr, R, G, B)  \
 (aggr).r = (R) / 255.0f; \
 (aggr).g = (G) / 255.0f; \

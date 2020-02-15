@@ -26,4 +26,4 @@ bool present_over(present_file* file);
 
 int present_seek(present_file* file, int off);
 int present_seek_to(present_file* file, int idx);
-void present_fill_render_queue(present_file* file, render_queue* rq);
+void present_fill_render_queue(present_file* file, Render_Queue* rq);
