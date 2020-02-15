@@ -17,13 +17,26 @@
 #pragma once
 #include "render_queue.h"
 
-struct present_file;
+struct Present_File;
 
-present_file* present_open(const char* filename);
-void present_close(present_file* file);
+// Load a presentation file into memory
+Present_File* Present_Open(const char* filename);
 
-bool present_over(present_file* file);
+// Close a presentation file
+void Present_Close(Present_File* file);
 
-int present_seek(present_file* file, int off);
-int present_seek_to(present_file* file, int idx);
-void present_fill_render_queue(present_file* file, render_queue* rq);
+// Returns whether the presentation is over
+bool Present_Over(Present_File* file);
+
+// Jumps forward `off` slides
+int Present_Seek(Present_File* file, int off);
+
+// Jumps to a given slide.
+// idx == -1 --> goes to last slide
+// idx < 0   --> goes to title slide
+// idx > len --> goes to the last black slide
+// otherwise --> goes to `idx`th slide
+int Present_SeekTo(Present_File* file, int idx);
+
+// Fill a render queue with draw commands
+void Present_FillRenderQueue(Present_File* file, Render_Queue* rq);

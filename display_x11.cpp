@@ -24,7 +24,7 @@
 #include <cairo-xcb.h>
 #include "display.h"
 
-struct display {
+struct Display {
     xcb_connection_t* conn;
     xcb_screen_t* scr;
     xcb_drawable_t wnd;
@@ -36,7 +36,7 @@ struct display {
     cairo_t* cr;
 };
 
-static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
+static xcb_visualtype_t *FindVisual(xcb_connection_t *c, xcb_visualid_t visual)
 {
     xcb_screen_iterator_t screen_iter = xcb_setup_roots_iterator(xcb_get_setup(c));
     
@@ -53,9 +53,9 @@ static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
     return NULL;
 }
 
-display* display_open() {
+Display* Display_Open() {
     const char* font_name = "-misc-fixed-*-*-*-*-20-*-*-*-*-*-iso8859-2";
-    display* ret = NULL;
+    Display* ret = NULL;
     unsigned int values[3] = {0, 0};
     xcb_connection_t* conn;
     xcb_screen_t* scr;
@@ -65,7 +65,7 @@ display* display_open() {
     xcb_visualtype_t* visual;
     unsigned int mask = XCB_GC_FOREGROUND | XCB_GC_GRAPHICS_EXPOSURES;
     
-    ret = (display*)malloc(sizeof(display));
+    ret = (Display*)malloc(sizeof(Display));
     if(ret) {
         conn = xcb_connect(NULL, NULL);
         scr = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
@@ -90,7 +90,7 @@ display* display_open() {
         xcb_map_window(conn, wnd);
         xcb_flush(conn);
         
-        visual = find_visual(conn, scr->root_visual);
+        visual = FindVisual(conn, scr->root_visual);
         
         // load a font
         font = xcb_generate_id(conn);
@@ -126,7 +126,7 @@ display* display_open() {
     return ret;
 }
 
-void display_close(display* disp) {
+void Display_Close(Display* disp) {
     assert(disp);
     if(disp) {
         if(disp->conn) {
@@ -140,11 +140,11 @@ void display_close(display* disp) {
     }
 }
 
-bool display_fetch_event(display* disp, display_event* out) {
+bool Display_FetchEvent(Display* disp, Display_Event& out) {
     bool ret = false;
     xcb_generic_event_t *e;
-    assert(disp && out && disp->conn);
-    if(disp && out) {
+    assert(disp && disp->conn);
+    if(disp) {
         e = xcb_wait_for_event(disp->conn);
         if(e) {
             switch(e->response_type & ~0x80) {
@@ -156,16 +156,16 @@ bool display_fetch_event(display* disp, display_event* out) {
                     break;
                 }
                 case XCB_EXPOSE:
-                *out = DISPEV_NONE; // force redraw
+                out = DISPEV_NONE; // force redraw
                 ret = true;
                 break;
                 case XCB_BUTTON_RELEASE: {
                     xcb_button_release_event_t *ev = (xcb_button_release_event_t *)e;
                     ret = true;
                     if(ev->detail == 1) {
-                        *out = DISPEV_NEXT;
+                        out = DISPEV_NEXT;
                     } else if(ev->detail == 3) {
-                        *out = DISPEV_PREV;
+                        out = DISPEV_PREV;
                     } else {
                         ret = false;
                     }
@@ -176,20 +176,20 @@ bool display_fetch_event(display* disp, display_event* out) {
                     ret = true;
                     switch(ev->detail) {
                         case 9: // ESC
-                        *out = DISPEV_EXIT;
+                        out = DISPEV_EXIT;
                         break;
                         case 65: // SPACE
                         case 114: // right cursor
-                        *out = DISPEV_NEXT;
+                        out = DISPEV_NEXT;
                         break;
                         case 113: // left cursor
-                        *out = DISPEV_PREV;
+                        out = DISPEV_PREV;
                         break;
                         case 112: // Page up
-                        *out = DISPEV_START;
+                        out = DISPEV_START;
                         break;
                         case 117: // Page down
-                        *out = DISPEV_END;
+                        out = DISPEV_END;
                         break;
                         default:
                         ret = false;
@@ -204,10 +204,10 @@ bool display_fetch_event(display* disp, display_event* out) {
     return ret;
 }
 
-void display_render_queue(display* disp, render_queue* rq) {
+void Display_RenderQueue(Display* disp, Render_Queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
-        rq_draw_cmd* cur = rq->commands;
+        RQ_Draw_Cmd* cur = rq->commands;
         
         // setup text drawing
         cairo_select_font_face(disp->cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
@@ -216,7 +216,7 @@ void display_render_queue(display* disp, render_queue* rq) {
         while(cur) {
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
-                    rq_draw_text* dtxt = (rq_draw_text*)cur;
+                    RQ_Draw_Text* dtxt = (RQ_Draw_Text*)cur;
                     const char* font_name = dtxt->font_name ? dtxt->font_name : "sans-serif";
                     cairo_select_font_face(disp->cr, font_name, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
                     cairo_set_font_size(disp->cr, dtxt->size * disp->s_height);
@@ -226,14 +226,14 @@ void display_render_queue(display* disp, render_queue* rq) {
                     break;
                 }
                 case RQCMD_DRAW_IMAGE: {
-                    rq_draw_image* dimg = (rq_draw_image*)cur;
+                    RQ_Draw_Image* dimg = (RQ_Draw_Image*)cur;
                     cairo_surface_t* imgsurf;
                     cairo_save(disp->cr);
                     imgsurf = cairo_image_surface_create_for_data(
-                        (unsigned char*)dimg->buffer,
-                        CAIRO_FORMAT_ARGB32,
-                        dimg->width, dimg->height,
-                        dimg->width * 4);
+                                                                  (unsigned char*)dimg->buffer,
+                                                                  CAIRO_FORMAT_ARGB32,
+                                                                  dimg->width, dimg->height,
+                                                                  dimg->width * 4);
                     cairo_set_source_surface(disp->cr, imgsurf, dimg->x * disp->s_width, dimg->y * disp->s_height);
                     cairo_paint(disp->cr);
                     cairo_surface_destroy(imgsurf);
@@ -241,7 +241,7 @@ void display_render_queue(display* disp, render_queue* rq) {
                     break;
                 }
                 case RQCMD_DRAW_RECTANGLE: {
-                    rq_draw_rect* drect = (rq_draw_rect*)cur;
+                    RQ_Draw_Rect* drect = (RQ_Draw_Rect*)cur;
                     int x, y, w, h;
                     x = drect->x0 * disp->s_width;
                     y = drect->y0 * disp->s_height;
@@ -262,6 +262,6 @@ void display_render_queue(display* disp, render_queue* rq) {
     }
 }
 
-bool display_swap_red_blue_channels() {
+bool Display_SwapRedBlueChannels() {
     return true;
 }

@@ -20,20 +20,20 @@
 #include <assert.h>
 #include "arena.h"
 
-struct mem_arena {
+struct Mem_Arena {
     unsigned size;
     unsigned used;
     uint8_t* cursor;
     uint8_t* content;
 };
 
-mem_arena* arena_create(unsigned size) {
-    mem_arena* ret = NULL;
+Mem_Arena* Arena_Create(unsigned size) {
+    Mem_Arena* ret = NULL;
     assert(size > 0);
     
-    ret = (mem_arena*)malloc(sizeof(mem_arena) + size);
+    ret = (Mem_Arena*)malloc(sizeof(Mem_Arena) + size);
     if(ret) {
-        memset(ret, 0, sizeof(mem_arena) + size);
+        memset(ret, 0, sizeof(Mem_Arena) + size);
         ret->size = size;
         ret->used = 0;
         ret->content = ret->cursor = (uint8_t*)(ret + 1);
@@ -42,14 +42,14 @@ mem_arena* arena_create(unsigned size) {
     return ret;
 }
 
-void arena_destroy(mem_arena* arena) {
+void Arena_Destroy(Mem_Arena* arena) {
     assert(arena);
     if(arena) {
         free(arena);
     }
 }
 
-void arena_clear(mem_arena* arena) {
+void Arena_Clear(Mem_Arena* arena) {
     assert(arena);
     if(arena) {
         arena->used = 0;
@@ -57,7 +57,7 @@ void arena_clear(mem_arena* arena) {
     }
 }
 
-void* arena_alloc(mem_arena* arena, unsigned size) {
+void* Arena_Alloc(Mem_Arena* arena, unsigned size) {
     void* ret = NULL;
     assert(arena && size > 0 && arena->size - arena->used >= size);
     // - Arena must exist
@@ -71,7 +71,7 @@ void* arena_alloc(mem_arena* arena, unsigned size) {
     return ret;
 }
 
-unsigned arena_used(mem_arena* arena) {
+unsigned Arena_Used(Mem_Arena* arena) {
     assert(arena);
     unsigned ret = 0;
     if(arena) {
@@ -80,7 +80,7 @@ unsigned arena_used(mem_arena* arena) {
     return ret;
 }
 
-unsigned arena_size(mem_arena* arena) {
+unsigned Arena_Size(Mem_Arena* arena) {
     assert(arena);
     unsigned ret = 0;
     if(arena) {

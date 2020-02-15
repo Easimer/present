@@ -22,49 +22,49 @@
 
 #define RQ_ARENA_SIZE (32 * 1024 * 1024) // 32MiB
 
-render_queue* rq_alloc() {
-    render_queue* ret = NULL;
+Render_Queue* RQ_Alloc() {
+    Render_Queue* ret = NULL;
     
-    ret = (render_queue*)malloc(sizeof(render_queue));
+    ret = (Render_Queue*)malloc(sizeof(Render_Queue));
     if(ret) {
-        ret->mem = arena_create(RQ_ARENA_SIZE);
+        ret->mem = Arena_Create(RQ_ARENA_SIZE);
         ret->commands = ret->last = NULL;
     }
     
     return ret;
 }
 
-void rq_free(render_queue* rq) {
+void RQ_Free(Render_Queue* rq) {
     assert(rq);
     if(rq) {
-        arena_destroy(rq->mem);
+        Arena_Destroy(rq->mem);
         free(rq);
     }
 }
 
-void rq_clear(render_queue* rq) {
+void RQ_Clear(Render_Queue* rq) {
     assert(rq);
     if(rq) {
-        arena_clear(rq->mem);
+        Arena_Clear(rq->mem);
         rq->commands = NULL;
         rq->last = NULL;
     }
 }
 
-void* rq_new_cmd(render_queue* rq, unsigned size) {
+void* RQ_NewCmd(Render_Queue* rq, unsigned size) {
     void* ret = NULL;
     assert(rq && size > 0);
     if(rq && size > 0) {
-        ret = arena_alloc(rq->mem, size);
-        rq_draw_cmd* hdr = (rq_draw_cmd*)ret;
+        ret = Arena_Alloc(rq->mem, size);
+        RQ_Draw_Cmd* hdr = (RQ_Draw_Cmd*)ret;
         hdr->cmd = RQCMD_INVALID;
         hdr->next = NULL;
         
         if(rq->last) {
-            rq->last->next = (rq_draw_cmd*)ret;
-            rq->last = (rq_draw_cmd*)ret;
+            rq->last->next = (RQ_Draw_Cmd*)ret;
+            rq->last = (RQ_Draw_Cmd*)ret;
         } else {
-            rq->commands = rq->last = (rq_draw_cmd*)ret;
+            rq->commands = rq->last = (RQ_Draw_Cmd*)ret;
         }
     }
     return ret;

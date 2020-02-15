@@ -17,11 +17,23 @@
 
 #pragma once
 
-struct mem_arena;
+// A handle to a memory arena
+struct Mem_Arena;
 
-mem_arena* arena_create(unsigned size);
-void arena_destroy(mem_arena* arena);
-void arena_clear(mem_arena* arena);
-void* arena_alloc(mem_arena* arena, unsigned size);
-unsigned arena_used(mem_arena* arena);
-unsigned arena_size(mem_arena* arena);
+// Creates a new area of a given size
+Mem_Arena* Arena_Create(unsigned size);
+
+// Frees an arena
+void Arena_Destroy(Mem_Arena* arena);
+
+// Clears the contents of an arena
+void Arena_Clear(Mem_Arena* arena);
+
+// Allocates a block in the arena, returning it's address
+void* Arena_Alloc(Mem_Arena* arena, unsigned size);
+
+// Returns how many bytes have been allocated in the arena
+unsigned Arena_Used(Mem_Arena* arena);
+
+// Returns how big is the arena
+unsigned Arena_Size(Mem_Arena* arena);

@@ -1,5 +1,5 @@
 // present
-// Copyright (C) 2019 Daniel Meszaros <easimer@gmail.com>
+// Copyright (C) 2019-2020 Daniel Meszaros <easimer@gmail.com>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,20 +17,50 @@
 #pragma once
 #include "render_queue.h"
 
-struct display;
-enum display_event {
+// A display handle.
+// The contents of this struct are platform-dependent
+// and clients of this API should not need to know
+// about them.
+struct Display;
+
+// User input actions.
+enum Display_Event {
+    // No event
     DISPEV_NONE = 0,
+    // User wants to see the previous slide
     DISPEV_PREV,
+    // User wants to see the next slide
     DISPEV_NEXT,
+    // User wants to see the title slide
     DISPEV_START,
+    // User wants to see the last slide
     DISPEV_END,
+    // User wants to exit
     DISPEV_EXIT,
+    // Invalid event
     DISPEV_MAX
 };
 
-display* display_open();
-void display_close(display*);
-bool display_fetch_event(display*, display_event* out);
-void display_render_queue(display*, render_queue*);
+// Tries to open a display.
+// Return non-NULL on success.
+Display* Display_Open();
 
-bool display_swap_red_blue_channels();
+// Close the display.
+//
+// If display is NULL, this is a no-op.
+void Display_Close(Display* display);
+
+// Tries to fetch an event from the event queue. If there was an
+// event, it is written to out and true will be returned.
+// If nothing happened since the last call, false will be returned.
+//
+// If display is NULL, this is a no-op and will return false.
+bool Display_FetchEvent(Display* display, Display_Event& out);
+
+// Draws a Render_Queue to the display.
+void Display_RenderQueue(Display* display, Render_Queue* rq);
+
+// Returns whether images queued to be drawn should
+// have their red and blue channels swapped.
+// Used in present.cpp when loading an image.
+bool Display_SwapRedBlueChannels();
