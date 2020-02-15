@@ -43,24 +43,24 @@ enum Display_Event {
 
 // Tries to open a display.
 // Return non-NULL on success.
-Display* DisplayOpen();
+Display* Display_Open();
 
 // Close the display.
 //
 // If display is NULL, this is a no-op.
-void DisplayClose(Display* display);
+void Display_Close(Display* display);
 
 // Tries to fetch an event from the event queue. If there was an
 // event, it is written to out and true will be returned.
 // If nothing happened since the last call, false will be returned.
 //
 // If display is NULL, this is a no-op and will return false.
-bool DisplayFetchEvent(Display* display, Display_Event& out);
+bool Display_FetchEvent(Display* display, Display_Event& out);
 
 // Draws a Render_Queue to the display.
-void DisplayRenderQueue(Display* display, Render_Queue* rq);
+void Display_RenderQueue(Display* display, Render_Queue* rq);
 
 // Returns whether images queued to be drawn should
 // have their red and blue channels swapped.
 // Used in present.cpp when loading an image.
-bool DisplaySwapRedBlueChannels();
+bool Display_SwapRedBlueChannels();

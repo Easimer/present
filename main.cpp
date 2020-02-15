@@ -21,37 +21,37 @@
 #include "present.h"
 #include "render_queue.h"
 
-static void render_loop(const char* filename) {
+static void RenderLoop(const char* filename) {
     Display* disp;
-    present_file* file;
+    Present_File* file;
     Display_Event ev;
     bool requested_exit = false;
     Render_Queue* rq = NULL;
     
     // Open presentation file
-    file = present_open(filename);
+    file = Present_Open(filename);
     if(file) {
         // Open a window
-        disp = DisplayOpen();
+        disp = Display_Open();
         if(disp) {
             // Loop until the presentation is over or
             // the user has requested an exit (by pressing ESC)
-            while(!present_over(file) && !requested_exit) {
+            while(!Present_Over(file) && !requested_exit) {
                 // Wait for an event
-                if(DisplayFetchEvent(disp, ev)) {
+                if(Display_FetchEvent(disp, ev)) {
                     int f;
                     switch(ev) {
                         case DISPEV_PREV:
-                        f = present_seek(file, -1);
+                        f = Present_Seek(file, -1);
                         break;
                         case DISPEV_NEXT:
-                        f = present_seek(file, 1);
+                        f = Present_Seek(file, 1);
                         break;
                         case DISPEV_START:
-                        f = present_seek_to(file, 0);
+                        f = Present_SeekTo(file, 0);
                         break;
                         case DISPEV_END:
-                        f = present_seek_to(file, -1);
+                        f = Present_SeekTo(file, -1);
                         break;
                         case DISPEV_EXIT:
                         requested_exit = true;
@@ -65,9 +65,9 @@ static void render_loop(const char* filename) {
                     // Allocate an empty render buffer
                     rq = RQ_Alloc();
                     // Only re-render if something happened
-                    present_fill_render_queue(file, rq);
+                    Present_FillRenderQueue(file, rq);
                     // Display render queue
-                    DisplayRenderQueue(disp, rq);
+                    Display_RenderQueue(disp, rq);
                     // Free render queue
                     RQ_Free(rq);
                     // NOTE(easimer): previously we allocated an RQ once at startup
@@ -77,16 +77,16 @@ static void render_loop(const char* filename) {
                     // hostage while not even using it.
                 }
             }
-            DisplayClose(disp);
+            Display_Close(disp);
         }
-        present_close(file);
+        Present_Close(file);
     }
 }
 
 int main(int argc, char** argv) {
     setlocale(LC_ALL, "en_US.utf8");
     if(argc == 2) {
-        render_loop(argv[1]);
+        RenderLoop(argv[1]);
     } else {
         fprintf(stderr, "Usage: %s filename\n", argv[0]);
     }

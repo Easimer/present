@@ -84,14 +84,14 @@ void RQ_Free(Render_Queue* rq);
 void RQ_Clear(Render_Queue* rq);
 // Creates a new command of a given size and appends it to the end of
 // the render queue.
-void* RQ_New_Cmd(Render_Queue* rq, unsigned size);
+void* RQ_NewCmd(Render_Queue* rq, unsigned size);
 
 #ifdef __cplusplus
 // Creates a new command of a given type and appends it to the end of
 // the render queue.
 template<typename T>
-inline T* RQ_New_Cmd(Render_Queue* rq, RQ_Cmd cmd = RQCMD_INVALID) {
-    T* ret = (T*)RQ_New_Cmd(rq, sizeof(T));
+inline T* RQ_NewCmd(Render_Queue* rq, RQ_Cmd cmd = RQCMD_INVALID) {
+    T* ret = (T*)RQ_NewCmd(rq, sizeof(T));
     
     ret->hdr.cmd = cmd;
     ret->hdr.next = NULL;

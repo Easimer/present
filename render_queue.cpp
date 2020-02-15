@@ -51,7 +51,7 @@ void RQ_Clear(Render_Queue* rq) {
     }
 }
 
-void* RQ_New_Cmd(Render_Queue* rq, unsigned size) {
+void* RQ_NewCmd(Render_Queue* rq, unsigned size) {
     void* ret = NULL;
     assert(rq && size > 0);
     if(rq && size > 0) {

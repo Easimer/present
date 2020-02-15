@@ -30,7 +30,7 @@
 
 #define PF_MEM_SIZE (64 * 1024)
 
-enum list_node_type {
+enum List_Node_Type {
     LNODE_INVALID = 0,
     LNODE_TEXT = 1,
     LNODE_IMAGE = 2,
@@ -46,7 +46,7 @@ enum Image_Alignment {
 };
 
 struct Present_List_Node {
-    list_node_type type;
+    List_Node_Type type;
     Present_List_Node* next;
     Present_List_Node* children;
     Present_List_Node* parent; // this is not the prev->prev of next!
@@ -78,7 +78,7 @@ struct present_slide {
     int current_indent_level;
 };
 
-struct present_file {
+struct Present_File {
     const char* path;
     Mem_Arena* mem;
     
@@ -177,7 +177,7 @@ static bool is_directive(const char** dirout, unsigned* dirlen, const char* buf,
     return ret;
 }
 
-static void append_slide(present_file* file, parse_state* state) {
+static void append_slide(Present_File* file, parse_state* state) {
     assert(file && state);
     present_slide* next_slide = (present_slide*)Arena_Alloc(file->mem, sizeof(present_slide));
     next_slide->chapter_title = state->current_chapter_title;
@@ -194,7 +194,7 @@ static void append_slide(present_file* file, parse_state* state) {
     file->slide_count++;
 }
 
-static void set_chapter_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
+static void set_chapter_title(Present_File* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     
     if(title_len == 0) {
@@ -208,7 +208,7 @@ static void set_chapter_title(present_file* file, parse_state* state, const char
     }
 }
 
-static void set_title(present_file* file, parse_state* state, const char* title, unsigned title_len) {
+static void set_title(Present_File* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     
     char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
@@ -218,7 +218,7 @@ static void set_title(present_file* file, parse_state* state, const char* title,
     file->title_len = title_len;
 }
 
-static void set_authors(present_file* file, parse_state* state, const char* authors, unsigned authors_len) {
+static void set_authors(Present_File* file, parse_state* state, const char* authors, unsigned authors_len) {
     assert(file && state && authors);
     
     char* buf = (char*)Arena_Alloc(file->mem, authors_len + 1);
@@ -337,7 +337,7 @@ static void swap_red_blue_channels(uint8_t* rgba_buffer, unsigned width, unsigne
     }
 }
 
-static void add_inline_image(present_file* file, parse_state* state, int indent_level, const char* path, unsigned path_len, Image_Alignment alignment) {
+static void add_inline_image(Present_File* file, parse_state* state, int indent_level, const char* path, unsigned path_len, Image_Alignment alignment) {
     char* prev_workdir = NULL;
     list_node_image* node;
     char full_path_buf[PATH_MAX];
@@ -393,7 +393,7 @@ static void add_inline_image(present_file* file, parse_state* state, int indent_
     //fprintf(stderr, "Appended image '%.*s'\n", path_len, path);
 }
 
-static void set_subtitle(present_file* file, parse_state* state, const char* title, unsigned title_len) {
+static void set_subtitle(Present_File* file, parse_state* state, const char* title, unsigned title_len) {
     assert(file && state && title);
     auto slide = state->last;
     if(!slide) {
@@ -407,7 +407,7 @@ static void set_subtitle(present_file* file, parse_state* state, const char* tit
     slide->subtitle = buf;
 }
 
-static void append_to_list(present_file* file, parse_state* state, int indent_level, const char* line, unsigned linelen) {
+static void append_to_list(Present_File* file, parse_state* state, int indent_level, const char* line, unsigned linelen) {
     auto slide = state->last;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
@@ -450,7 +450,7 @@ static void append_to_list(present_file* file, parse_state* state, int indent_le
     //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
 }
 
-static void set_font(present_file* file, const char** dst, const char* name, unsigned name_len) {
+static void set_font(Present_File* file, const char** dst, const char* name, unsigned name_len) {
     char* buf;
     assert(file && dst && name && name_len > 0);
     if(file && dst && name && name_len > 0) {
@@ -464,7 +464,7 @@ static void set_font(present_file* file, const char** dst, const char* name, uns
     }
 }
 
-static void set_color(present_file* file, RGBA_Color* dst, const char* col, unsigned col_len) {
+static void set_color(Present_File* file, RGBA_Color* dst, const char* col, unsigned col_len) {
     assert(file && dst && col && col_len > 0);
     if(file && dst && col && col_len > 0) {
         if(col_len < 7) {
@@ -494,7 +494,7 @@ static void set_color(present_file* file, RGBA_Color* dst, const char* col, unsi
     }
 }
 
-static bool parse_file(present_file* file, FILE* f) {
+static bool parse_file(Present_File* file, FILE* f) {
     bool ret = true;
     unsigned line_length;
     char line_buf[512];
@@ -575,15 +575,15 @@ static bool parse_file(present_file* file, FILE* f) {
     return ret;
 }
 
-present_file* present_open(const char* filename) {
-    present_file* ret = NULL;
+Present_File* Present_Open(const char* filename) {
+    Present_File* ret = NULL;
     FILE* f = NULL;
     
     assert(filename);
     if(filename) {
         f = fopen(filename, "r");
         if(f) {
-            ret = (present_file*)malloc(sizeof(present_file));
+            ret = (Present_File*)malloc(sizeof(Present_File));
             if(ret) {
                 ret->path = filename;
                 ret->mem = Arena_Create(PF_MEM_SIZE);
@@ -618,14 +618,14 @@ present_file* present_open(const char* filename) {
     return ret;
 }
 
-void present_close(present_file* file) {
+void Present_Close(Present_File* file) {
     assert(file);
     if(file) {
         free(file);
     }
 }
 
-bool present_over(present_file* file) {
+bool Present_Over(Present_File* file) {
     bool ret = true;
     assert(file);
     if(file) {
@@ -634,18 +634,18 @@ bool present_over(present_file* file) {
     return ret;
 }
 
-int present_seek(present_file* file, int off) {
+int Present_Seek(Present_File* file, int off) {
     int ret = 0;
     int abs;
     assert(file);
     if(file) {
         abs = file->current_slide + off;
-        ret = present_seek_to(file, abs);
+        ret = Present_SeekTo(file, abs);
     }
     return ret;
 }
 
-int present_seek_to(present_file* file, int abs) {
+int Present_SeekTo(Present_File* file, int abs) {
     int ret = 0;
     assert(file);
     if(file) {
@@ -672,18 +672,18 @@ int present_seek_to(present_file* file, int abs) {
     return ret;
 }
 
-static void present_clear_screen(present_file* file, Render_Queue* rq, float r, float b, float g) {
-    auto rect = RQ_New_Cmd<RQ_Draw_Rect>(rq, RQCMD_DRAW_RECTANGLE);
+static void PresentClearScreen(Present_File* file, Render_Queue* rq, float r, float b, float g) {
+    auto rect = RQ_NewCmd<RQ_Draw_Rect>(rq, RQCMD_DRAW_RECTANGLE);
     rect->x0 = rect->y0 = 0;
     rect->x1 = rect->y1 = 1;
     rect->color.r = r; rect->color.g = g;
     rect->color.b = b; rect->color.a = 1;
 }
 
-static void present_fill_rq_title_slide(present_file* file, Render_Queue* rq) {
-    present_clear_screen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
+static void PresentFillRQTitleSlide(Present_File* file, Render_Queue* rq) {
+    PresentClearScreen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
     if(file->title_len && file->title) {
-        auto title = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
+        auto title = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         title->x = VIRTUAL_X(24);
         title->y = VIRTUAL_Y((720 - 72) / 2);
         title->size = VIRTUAL_Y(72);
@@ -694,7 +694,7 @@ static void present_fill_rq_title_slide(present_file* file, Render_Queue* rq) {
     }
     
     if(file->authors_len && file->authors) {
-        auto authors = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
+        auto authors = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         authors->x = VIRTUAL_X(36);
         authors->y = VIRTUAL_Y((720 + 20) / 2);
         authors->size = VIRTUAL_Y(20);
@@ -705,9 +705,9 @@ static void present_fill_rq_title_slide(present_file* file, Render_Queue* rq) {
     }
 }
 
-static void present_fill_rq_end_slide(present_file* file, Render_Queue* rq) {
+static void PresentFillRQEndSlide(Present_File* file, Render_Queue* rq) {
     // a filled rectangle covering the screen
-    present_clear_screen(file, rq, 0, 0, 0);
+    PresentClearScreen(file, rq, 0, 0, 0);
 }
 
 struct List_Processor_State {
@@ -715,14 +715,14 @@ struct List_Processor_State {
     int right_y;
 };
 
-static void process_list_element(present_file* file, Present_List_Node* node, Render_Queue* rq,
-                                 List_Processor_State& state) {
+static void ProcessListElement(Present_File* file, Present_List_Node* node, Render_Queue* rq,
+                               List_Processor_State& state) {
     auto cur = node;
     while(cur) {
         if(cur->type == LNODE_TEXT) {
             RQ_Draw_Text* cmd = NULL;
             list_node_text* text = (list_node_text*)cur;
-            cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
+            cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = VIRTUAL_X(state.x);
             cmd->y = VIRTUAL_Y(state.y);
             cmd->size = VIRTUAL_Y(32);
@@ -736,14 +736,14 @@ static void process_list_element(present_file* file, Present_List_Node* node, Re
             int w, h, channels;
             void *pixbuf, *pixbuf_final;
             list_node_image* img = (list_node_image*)cur;
-            cmd = RQ_New_Cmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
+            cmd = RQ_NewCmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
             
             pixbuf = stbi_load(img->path, &w, &h, &channels, STBI_rgb_alpha);
             if(pixbuf) {
                 unsigned pixbuf_siz = sizeof(stbi_uc) * w * h * 4;
                 pixbuf_final = Arena_Alloc(rq->mem, pixbuf_siz);
                 memcpy(pixbuf_final, pixbuf, pixbuf_siz);
-                if(DisplaySwapRedBlueChannels()) {
+                if(Display_SwapRedBlueChannels()) {
                     swap_red_blue_channels((uint8_t*)pixbuf_final, w, h);
                 }
                 stbi_image_free(pixbuf);
@@ -782,27 +782,27 @@ static void process_list_element(present_file* file, Present_List_Node* node, Re
         }
         if(cur->children) {
             state.x += 24;
-            process_list_element(file, cur->children, rq, state);
+            ProcessListElement(file, cur->children, rq, state);
         }
         cur = cur->next;
     }
     state.x -= 24;
 }
 
-static void present_fill_rq_regular_slide(present_file* file, present_slide* slide, Render_Queue* rq) {
+static void PresentFillRQRegularSlide(Present_File* file, present_slide* slide, Render_Queue* rq) {
     List_Processor_State lps = {8, 160, 80};
     RQ_Draw_Text* cmd = NULL;
     RQ_Draw_Rect* rect = NULL;
     
-    present_clear_screen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
+    PresentClearScreen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
     
     if(slide->chapter_title) {
-        rect = RQ_New_Cmd<RQ_Draw_Rect>(rq, RQCMD_DRAW_RECTANGLE);
+        rect = RQ_NewCmd<RQ_Draw_Rect>(rq, RQCMD_DRAW_RECTANGLE);
         rect->x0 = 0; rect->y0 = 0;
         rect->x1 = 1; rect->y1 = VIRTUAL_Y(72);
         rect->color = file->color_bg_header;
         
-        cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
+        cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10);
         cmd->y = VIRTUAL_Y(64);
         cmd->size = VIRTUAL_Y(64);
@@ -812,7 +812,7 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->color = file->color_fg_header;
     }
     if(slide->subtitle) {
-        cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
+        cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10); cmd->y = VIRTUAL_Y(120);
         cmd->size = VIRTUAL_Y(44);
         cmd->text_len = slide->subtitle_len;
@@ -821,9 +821,9 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
         cmd->color = file->color_fg;
     }
     
-    process_list_element(file, slide->content, rq, lps);
+    ProcessListElement(file, slide->content, rq, lps);
     
-    cmd = RQ_New_Cmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
+    cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
     int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
     cmd->text = (char*)Arena_Alloc(rq->mem, slide_num_len + 1);
     cmd->text_len = slide_num_len;
@@ -835,16 +835,16 @@ static void present_fill_rq_regular_slide(present_file* file, present_slide* sli
     cmd->font_name = file->font_general;
 }
 
-void present_fill_render_queue(present_file* file, Render_Queue* rq) {
+void Present_FillRenderQueue(Present_File* file, Render_Queue* rq) {
     assert(file && rq);
     if(file && rq) {
         if(file->current_slide == 0) {
-            present_fill_rq_title_slide(file, rq);
+            PresentFillRQTitleSlide(file, rq);
         } else if(file->current_slide == file->slide_count) {
-            present_fill_rq_end_slide(file, rq);
+            PresentFillRQEndSlide(file, rq);
         } else {
             auto slide = file->current_slide_data;
-            present_fill_rq_regular_slide(file, slide, rq);
+            PresentFillRQRegularSlide(file, slide, rq);
         }
     }
 }

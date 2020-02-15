@@ -268,7 +268,7 @@ static BOOL CALLBACK MonitorEnumerationProc(HMONITOR hMonitor, HDC hDC, LPRECT r
     return TRUE;
 }
 
-struct Display* DisplayOpen() {
+struct Display* Display_Open() {
     Display* ret = NULL;
     WNDCLASSA wc = {0};
     LONG win_x = -1, win_y = -1, win_w = -1, win_h = -1;
@@ -320,7 +320,7 @@ struct Display* DisplayOpen() {
     return ret;
 }
 
-void DisplayClose(Display* disp) {
+void Display_Close(Display* disp) {
     if(disp) {
         DeleteObject(disp->penInvis);
         DeleteObject(disp->penBlack);
@@ -329,7 +329,7 @@ void DisplayClose(Display* disp) {
     }
 }
 
-bool DisplayFetchEvent(Display* disp, Display_Event& out) {
+bool Display_FetchEvent(Display* disp, Display_Event& out) {
     MSG msg;
     bool ret = false;
     
@@ -345,7 +345,7 @@ bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     return ret;
 }
 
-void DisplayRenderQueue(Display* disp, Render_Queue* rq) {
+void Display_RenderQueue(Display* disp, Render_Queue* rq) {
     MSG msg = {0};
     
     if(disp && rq) {
@@ -357,6 +357,6 @@ void DisplayRenderQueue(Display* disp, Render_Queue* rq) {
     }
 }
 
-bool DisplaySwapRedBlueChannels() {
+bool Display_SwapRedBlueChannels() {
     return true;
 }

@@ -53,7 +53,7 @@ static xcb_visualtype_t *find_visual(xcb_connection_t *c, xcb_visualid_t visual)
     return NULL;
 }
 
-Display* DisplayOpen() {
+Display* Display_Open() {
     const char* font_name = "-misc-fixed-*-*-*-*-20-*-*-*-*-*-iso8859-2";
     Display* ret = NULL;
     unsigned int values[3] = {0, 0};
@@ -126,7 +126,7 @@ Display* DisplayOpen() {
     return ret;
 }
 
-void DisplayClose(Display* disp) {
+void Display_Close(Display* disp) {
     assert(disp);
     if(disp) {
         if(disp->conn) {
@@ -140,7 +140,7 @@ void DisplayClose(Display* disp) {
     }
 }
 
-bool DisplayFetchEvent(Display* disp, Display_Event& out) {
+bool Display_FetchEvent(Display* disp, Display_Event& out) {
     bool ret = false;
     xcb_generic_event_t *e;
     assert(disp && disp->conn);
@@ -204,7 +204,7 @@ bool DisplayFetchEvent(Display* disp, Display_Event& out) {
     return ret;
 }
 
-void DisplayRenderQueue(Display* disp, Render_Queue* rq) {
+void Display_RenderQueue(Display* disp, Render_Queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
         RQ_Draw_Cmd* cur = rq->commands;
@@ -262,6 +262,6 @@ void DisplayRenderQueue(Display* disp, Render_Queue* rq) {
     }
 }
 
-bool DisplaySwapRedBlueChannels() {
+bool Display_SwapRedBlueChannels() {
     return true;
 }
