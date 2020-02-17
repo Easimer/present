@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -234,7 +235,13 @@ void Display_RenderQueue(Display* disp, Render_Queue* rq) {
                                                                   CAIRO_FORMAT_ARGB32,
                                                                   dimg->width, dimg->height,
                                                                   dimg->width * 4);
-                    cairo_set_source_surface(disp->cr, imgsurf, dimg->x * disp->s_width, dimg->y * disp->s_height);
+                    float dest_width = dimg->w * disp->s_width;
+                    float dest_height = dimg->h * disp->s_height;
+                    float scale_x = dest_width / dimg->width;
+                    float scale_y = dest_height / dimg->height;
+                    cairo_translate(disp->cr, dimg->x * disp->s_width, dimg->y * disp->s_height);
+                    cairo_scale(disp->cr, scale_x, scale_y);
+                    cairo_set_source_surface(disp->cr, imgsurf, 0, 0);
                     cairo_paint(disp->cr);
                     cairo_surface_destroy(imgsurf);
                     cairo_restore(disp->cr);
