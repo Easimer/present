@@ -124,7 +124,7 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 
                 (void)x, (void)y, (void)w, (void)h;
                 
-                //BitBlt(hDC, x, y, w, h, hDibDC, 0, 0, SRCCOPY);
+                SetStretchBltMode(hDC, HALFTONE);
                 int destW = (int)(disp->s_width * dimg->w);
                 int destH = (int)(disp->s_height * dimg->h);
                 StretchBlt(hDC, x, y, destW, destH, hDibDC, 0, 0, dimg->width, dimg->height, SRCCOPY); 
