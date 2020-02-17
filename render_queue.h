@@ -57,7 +57,8 @@ struct RQ_Draw_Text {
 struct RQ_Draw_Image {
     RQ_Draw_Cmd hdr;
     float x, y; // position [0, 1] screen space
-    int width, height; // Image size in pixels
+    float w, h; // size [0, 1]
+    int width, height; // Image size in pixels TODO(easimer): rename these
     void* buffer; // R8B8G8 format
 };
 

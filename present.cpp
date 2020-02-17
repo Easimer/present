@@ -42,6 +42,7 @@ enum Image_Alignment {
     IMGALIGN_LEFT = 1,
     IMGALIGN_INLINE = 1,
     IMGALIGN_RIGHT = 2,
+    IMGALIGN_FULLWIDE = 3,
     IMGALIGN_MAX
 };
 
@@ -536,6 +537,8 @@ static bool ParseFile(Present_File* file, FILE* f) {
                             AddInlineImage(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_INLINE);
                         } else if(strncmp(directive, "RIGHT_IMAGE", directive_len) == 0) {
                             AddInlineImage(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_RIGHT);
+                        } else if(strncmp(directive, "FULLWIDE_IMAGE", directive_len) == 0) {
+                            AddInlineImage(file, &pstate, indent_level, directive_arg, directive_arg_len, IMGALIGN_FULLWIDE);
                         } else if(strncmp(directive, "CHAPTER", directive_len) == 0) {
                             SetChapterTitle(file, &pstate, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "TITLE", directive_len) == 0) {
@@ -751,24 +754,29 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                 
                 cmd->width = w;
                 cmd->height = h;
+                cmd->w = 0.5f;
+                cmd->h = ((float)h / (float)w) * 0.5f;
                 cmd->buffer = pixbuf_final;
                 
                 switch(img->alignment) {
                     case IMGALIGN_RIGHT:
-                    cmd->x = 1 - VIRTUAL_X(w);
-                    if(cmd->x < 0) {
-                        cmd->x = 0.25f;
-                        fprintf(stderr, "Warning: image '%s' is too wide to fit on the screen!\n", img->path);
-                    }
+                    cmd->x = 0.5;
                     cmd->y = VIRTUAL_Y(state.right_y);
-                    state.right_y += cmd->height;
+                    state.right_y += (int)(720 * cmd->h);
                     break;
                     default:
                     fprintf(stderr, "Unimplemented image alignment %d\n", img->alignment);
                     case IMGALIGN_INLINE:
                     cmd->x = 0;
                     cmd->y = VIRTUAL_Y(state.y);
-                    state.y += cmd->height;
+                    state.y += (int)(720 * cmd->h);
+                    break;
+                    case IMGALIGN_FULLWIDE:
+                    cmd->x = 0;
+                    cmd->y = VIRTUAL_Y(state.y);
+                    cmd->w = 1.0f;
+                    cmd->h *= 2.0f;
+                    state.y += (int)(720 * cmd->h);
                     break;
                 }
                 
