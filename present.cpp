@@ -27,6 +27,7 @@
 #include "display.h" // display_swap_red_blue_channels
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#include "image_load.h"
 
 #define PF_MEM_SIZE (64 * 1024)
 
@@ -65,6 +66,8 @@ struct list_node_image {
     int path_len;
     const char* path;
     Image_Alignment alignment;
+    
+    Promised_Image* promise;
 };
 
 struct present_slide {
@@ -718,6 +721,20 @@ struct List_Processor_State {
     int right_y;
 };
 
+static void PreloadImages(Present_File* file, Present_List_Node* node) {
+    auto cur = node;
+    while(cur) {
+        if(cur->type == LNODE_IMAGE) {
+            list_node_image* img = (list_node_image*)cur;
+            img->promise = ImageLoader_Request(img->path);
+        }
+        if(cur->children) {
+            PreloadImages(file, cur->children);
+        }
+        cur = cur->next;
+    }
+}
+
 static void ProcessListElement(Present_File* file, Present_List_Node* node, Render_Queue* rq,
                                List_Processor_State& state) {
     auto cur = node;
@@ -740,24 +757,24 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
             void *pixbuf, *pixbuf_final;
             list_node_image* img = (list_node_image*)cur;
             cmd = RQ_NewCmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
-            
-            pixbuf = stbi_load(img->path, &w, &h, &channels, STBI_rgb_alpha);
-            if(pixbuf) {
+
+            assert(img->promise != NULL);
+            auto limg = ImageLoader_Await(img->promise);
+            if(limg) {
+                // TODO(easimer): this copy shouldn't be needed
+                w = limg->width;
+                h = limg->height;
                 unsigned pixbuf_siz = sizeof(stbi_uc) * w * h * 4;
                 pixbuf_final = Arena_Alloc(rq->mem, pixbuf_siz);
-                memcpy(pixbuf_final, pixbuf, pixbuf_siz);
-                if(Display_SwapRedBlueChannels()) {
-                    SwapRedBlueChannels((uint8_t*)pixbuf_final, w, h);
-                }
-                stbi_image_free(pixbuf);
-                pixbuf = NULL;
-                
+                memcpy(pixbuf_final, limg->buffer, pixbuf_siz);
                 cmd->width = w;
                 cmd->height = h;
                 cmd->w = 0.5f;
                 cmd->h = ((float)h / (float)w) * 0.5f;
                 cmd->buffer = pixbuf_final;
-                
+                ImageLoader_Free(limg);
+                img->promise = NULL;
+
                 switch(img->alignment) {
                     case IMGALIGN_RIGHT:
                     cmd->x = 0.5;
@@ -779,11 +796,8 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                     state.y += (int)(720 * cmd->h);
                     break;
                 }
-                
-                assert(cmd->buffer);
-                
             } else {
-                fprintf(stderr, "Couldn't load image '%s': %s\n", img->path, stbi_failure_reason());
+                fprintf(stderr, "Couldn't load image '%s'\n", img->path);
                 cmd->width = cmd->height = 0;
                 cmd->buffer = NULL;
             }
@@ -829,6 +843,7 @@ static void PresentFillRQRegularSlide(Present_File* file, present_slide* slide, 
         cmd->color = file->color_fg;
     }
     
+    PreloadImages(file, slide->content);
     ProcessListElement(file, slide->content, rq, lps);
     
     cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);

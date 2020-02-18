@@ -2,9 +2,9 @@ CFLAGS_X11=$(shell pkg-config x11-xcb cairo xcb-ewmh --cflags)
 LDFLAGS_X11=$(shell pkg-config x11-xcb cairo xcb-ewmh --libs)
 
 CXXFLAGS=$(CFLAGS_X11) -Wall -g -O0
-LDFLAGS=$(LDFLAGS_X11)
+LDFLAGS=$(LDFLAGS_X11) -lpthread
 
-OBJECTS=main.o arena.o render_queue.o present.o display_x11.o
+OBJECTS=main.o arena.o render_queue.o present.o display_x11.o image_load.o
 
 all: present
 

@@ -16,6 +16,8 @@
 
 #pragma once
 #include "arena.h"
+#include "image_load.h"
+#include <stddef.h>
 
 // Render command kind
 enum RQ_Cmd {

@@ -27,7 +27,9 @@ static void RenderLoop(const char* filename) {
     Display_Event ev;
     bool requested_exit = false;
     Render_Queue* rq = NULL;
-    
+
+    ImageLoader_Init();
+
     // Open presentation file
     file = Present_Open(filename);
     if(file) {
@@ -81,6 +83,8 @@ static void RenderLoop(const char* filename) {
         }
         Present_Close(file);
     }
+
+    ImageLoader_Shutdown();
 }
 
 int main(int argc, char** argv) {
