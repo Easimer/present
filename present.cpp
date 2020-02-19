@@ -753,11 +753,11 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
             state.y += 40;
         } else if(cur->type == LNODE_IMAGE) {
             RQ_Draw_Image* cmd = NULL;
-            int w, h, channels;
-            void *pixbuf, *pixbuf_final;
+            int w, h;
+            void *pixbuf_final;
             list_node_image* img = (list_node_image*)cur;
             cmd = RQ_NewCmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
-
+            
             assert(img->promise != NULL);
             auto limg = ImageLoader_Await(img->promise);
             if(limg) {
@@ -774,7 +774,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                 cmd->buffer = pixbuf_final;
                 ImageLoader_Free(limg);
                 img->promise = NULL;
-
+                
                 switch(img->alignment) {
                     case IMGALIGN_RIGHT:
                     cmd->x = 0.5;

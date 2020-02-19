@@ -28,18 +28,6 @@
 
 #define THREAD_COUNT (2)
 
-struct Promised_Image {
-    Promised_Image(std::string&& path)
-        : path(path), processed(false), buffer(NULL),
-        w(0), h(0) {}
-
-    std::string path;
-    bool processed;
-
-    void* buffer;
-    int w, h;
-};
-
 using Request_Queue = std::queue<Promised_Image*>;
 using Lock = std::mutex;
 using Lock_Guard = std::lock_guard<std::mutex>;
@@ -47,13 +35,49 @@ using Unique_Lock = std::unique_lock<std::mutex>;
 using Thread = std::thread;
 using Cond_Var = std::condition_variable;
 
+struct Counting_Semaphore {
+    public:
+    void release() {
+        Lock_Guard G(mtx);
+        ++count;
+        cv.notify_one();
+    }
+    
+    void acquire() {
+        Unique_Lock UL(mtx);
+        while(!count) {
+            cv.wait(UL);
+        }
+        count--;
+    }
+    
+    Counting_Semaphore() : count(0) {}
+    Counting_Semaphore(const Counting_Semaphore&) = delete;
+    void operator=(const Counting_Semaphore&) = delete;
+    private:
+    Lock mtx;
+    Cond_Var cv;
+    unsigned long count;
+};
+
+struct Promised_Image {
+    Promised_Image(std::string&& path)
+        : path(path), processed(false), buffer(NULL),
+    w(0), h(0) {}
+    
+    std::string path;
+    volatile bool processed;
+    
+    void* buffer;
+    int w, h;
+};
+
 static bool gShutdown = false;
 
 static Lock gQueueLock;
 static Request_Queue* gRequestQueue = NULL;
 
-static Cond_Var gCV;
-static Lock gCVLock;
+static Counting_Semaphore gSema;
 
 static Thread gThread[THREAD_COUNT];
 
@@ -67,15 +91,18 @@ static void SwapRedBlueChannels(uint8_t* rgba_buffer, unsigned width, unsigned h
     }
 }
 
-static void ThreadFunc() {
+static void ThreadFunc(int i) {
     int w, h, channels;
-    void *pixbuf, *pixbuf_final;
+    void *pixbuf;
     while(!gShutdown) {
-        Unique_Lock UL(gCVLock);
-        gCV.wait(UL);
-        Lock_Guard G(gQueueLock);
-        auto P = gRequestQueue->back();
+        gSema.acquire();
+        if(gShutdown) break; // shutdown
+        gQueueLock.lock();
+        auto P = gRequestQueue->front();
+        //printf("Loader thread %d is loading '%s' (%p), N=%zu\n", i, P->path.c_str(), P, gRequestQueue->size());
         gRequestQueue->pop();
+        gQueueLock.unlock();
+        
         pixbuf = stbi_load(P->path.c_str(), &w, &h, &channels, STBI_rgb_alpha);
         if(pixbuf) {
             if(Display_SwapRedBlueChannels()) {
@@ -96,13 +123,15 @@ void ImageLoader_Init() {
     gShutdown = false;
     gRequestQueue = new Request_Queue;
     for(int i = 0; i < THREAD_COUNT; i++) {
-        gThread[i] = Thread(ThreadFunc);
+        gThread[i] = Thread(ThreadFunc, i);
     }
 }
 
 void ImageLoader_Shutdown() {
     gShutdown = true;
-    gCV.notify_all();
+    for(int i = 0; i < THREAD_COUNT; i++) {
+        gSema.release();
+    }
     for(int i = 0; i < THREAD_COUNT; i++) {
         gThread[i].join();
     }
@@ -112,21 +141,24 @@ void ImageLoader_Shutdown() {
 
 Promised_Image* ImageLoader_Request(const char* path) {
     Promised_Image* ret = NULL;
-
+    
     if(path && gRequestQueue) {
-        Lock_Guard G(gQueueLock);
         ret = new Promised_Image(std::string(path));
+        gQueueLock.lock();
         gRequestQueue->push(ret);
-        gCV.notify_one();
+        gQueueLock.unlock();
+        //printf("Client thread notifying threads about '%p'\n", ret);
+        gSema.release();
     }
-
+    
     return ret;
 }
 
 Loaded_Image* ImageLoader_Await(Promised_Image* pimg) {
     Loaded_Image* ret = NULL;
-
+    
     if(pimg) {
+        //printf("Client thread awaiting on '%p'\n", pimg);
         while(!pimg->processed) {
             std::this_thread::yield();
         }
@@ -137,11 +169,10 @@ Loaded_Image* ImageLoader_Await(Promised_Image* pimg) {
             ret->height = pimg->h;
         }
     }
-
+    
     return ret;
 }
 
-//void ImageLoader_Free(Promised_Image* pimg);
 void ImageLoader_Free(Loaded_Image* limg) {
     if(limg) {
         stbi_image_free(limg->buffer);
