@@ -27,9 +27,9 @@ static void RenderLoop(const char* filename) {
     Display_Event ev;
     bool requested_exit = false;
     Render_Queue* rq = NULL;
-
+    
     ImageLoader_Init();
-
+    
     // Open presentation file
     file = Present_Open(filename);
     if(file) {
@@ -60,6 +60,8 @@ static void RenderLoop(const char* filename) {
                         break;
                         case DISPEV_NONE:
                         break;
+                        case DISPEV_REMOTE_REQUEST:
+                        break;
                         default:
                         assert(0);
                         break;
@@ -83,7 +85,7 @@ static void RenderLoop(const char* filename) {
         }
         Present_Close(file);
     }
-
+    
     ImageLoader_Shutdown();
 }
 

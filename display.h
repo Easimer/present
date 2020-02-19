@@ -37,9 +37,17 @@ enum Display_Event {
     DISPEV_END,
     // User wants to exit
     DISPEV_EXIT,
+    // A remote control is trying to connect
+    DISPEV_REMOTE_REQUEST,
+    // A remote control has connected
+    DISPEV_REMOTE_CONNECTED,
+    // A remote control has been disconnected
+    DISPEV_REMOTE_TIMEDOUT,
     // Invalid event
     DISPEV_MAX
 };
+
+#define REMOTE_PASSWORD_LEN (64)
 
 // Tries to open a display.
 // Return non-NULL on success.
@@ -64,3 +72,6 @@ void Display_RenderQueue(Display* display, Render_Queue* rq);
 // have their red and blue channels swapped.
 // Used in present.cpp when loading an image.
 bool Display_SwapRedBlueChannels();
+
+// Fills buffer with the expected password to display
+bool Display_GetExpectedRemotePassword(char buffer[REMOTE_PASSWORD_LEN]);

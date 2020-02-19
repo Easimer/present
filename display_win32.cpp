@@ -32,6 +32,20 @@ using namespace Gdiplus;
 // WPARAM and LPARAM are always zero.
 #define WM_JUMPSTART (WM_USER + 0x0000)
 
+// Pseudo-event to notify the UI thread about a command sent by the remote controller
+// WPARAM is a Remote_Control_Event value
+// LPARAM's value depends on WPARAM:
+// - Request:
+// - Connected:
+#define WM_REMOTECTL (WM_USER + 0x0001)
+
+enum Remote_Control_Event {
+    RCE_Invalid = 0,
+    RCE_Request,
+    RCE_Connected,
+    RCE_Max
+};
+
 struct Display {
     HWND wnd;
     
@@ -47,7 +61,27 @@ struct Display {
     Display_Event* ev_out;
     bool ev_res;
     Render_Queue* rq;
+    
+    // Remote Control
+    HANDLE hRCThread;
+    Display_Event evRCEvent;
 };
+
+static DWORD WINAPI ThreadProcRC(LPVOID lparam) {
+    DWORD ret = 0;
+    
+    // TODO(easimer):
+    // - listen socket
+    // - select listen
+    // - accept
+    // - send DISPEV_REMOTE_REQUEST event
+    // - wait for client to respond (timeout)
+    // - ack
+    // - select read commands, ack em
+    // - on shutdown, close socket and ret
+    
+    return ret;
+}
 
 static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const Render_Queue* rq) {
     assert(rClient && rq);
@@ -227,6 +261,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             if(disp->ev_out) {
                 disp->ev_res = true;
                 *disp->ev_out = DISPEV_NONE; // force redraw
+            }
+            break;
+        }
+        case WM_REMOTECTL: {
+            switch((Remote_Control_Event)wParam) {
+                case RCE_Request:
+                if(disp->ev_out) {
+                    disp->ev_res = true;
+                    *disp->ev_out = DISPEV_REMOTE_REQUEST;
+                }
+                break;
+                case RCE_Connected:
+                if(disp->ev_out) {
+                    disp->ev_res = true;
+                    *disp->ev_out = DISPEV_REMOTE_CONNECTED;
+                }
+                break;
             }
             break;
         }
