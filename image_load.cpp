@@ -26,8 +26,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#define THREAD_COUNT (2)
-
 using Request_Queue = std::queue<Promised_Image*>;
 using Lock = std::mutex;
 using Lock_Guard = std::lock_guard<std::mutex>;
@@ -79,7 +77,8 @@ static Request_Queue* gRequestQueue = NULL;
 
 static Counting_Semaphore gSema;
 
-static Thread gThread[THREAD_COUNT];
+static Thread* gThread = NULL;
+static unsigned gThreadCount = 0;
 
 static void SwapRedBlueChannels(uint8_t* rgba_buffer, unsigned width, unsigned height) {
     for(unsigned y = 0; y < height; y++) {
@@ -119,22 +118,47 @@ static void ThreadFunc(int i) {
     }
 }
 
-void ImageLoader_Init() {
-    gShutdown = false;
-    gRequestQueue = new Request_Queue;
-    for(int i = 0; i < THREAD_COUNT; i++) {
+
+static void CreateThreads() {
+    auto N = std::thread::hardware_concurrency();
+    if(N > 1) {
+        if(N > 4) {
+            // We don't want more than 3 threads doing I/O
+            N = 3;
+        } else {
+            N -= 1;
+        }
+    } else {
+        N = 2;
+    }
+    printf("Disk I/O on %u threads\n", N);
+    gThread = new Thread[N];
+    gThreadCount = N;
+    for(unsigned i = 0; i < N; i++) {
         gThread[i] = Thread(ThreadFunc, i);
     }
 }
 
-void ImageLoader_Shutdown() {
+static void CleanupThreads() {
     gShutdown = true;
-    for(int i = 0; i < THREAD_COUNT; i++) {
+    for(unsigned i = 0; i < gThreadCount; i++) {
         gSema.release();
     }
-    for(int i = 0; i < THREAD_COUNT; i++) {
+    for(unsigned i = 0; i < gThreadCount; i++) {
         gThread[i].join();
     }
+    gThreadCount = 0;
+    delete[] gThread;
+}
+
+void ImageLoader_Init() {
+    gShutdown = false;
+    gRequestQueue = new Request_Queue;
+    CreateThreads();
+}
+
+void ImageLoader_Shutdown() {
+    CleanupThreads();
     delete gRequestQueue;
     gRequestQueue = NULL;
 }
