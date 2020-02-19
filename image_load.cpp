@@ -23,7 +23,7 @@
 #include <string>
 #include <queue>
 #include <list>
-
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #define THREAD_COUNT (2)

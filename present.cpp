@@ -24,10 +24,8 @@
 #include <assert.h>
 #include "present.h"
 #include "arena.h"
-#include "display.h" // display_swap_red_blue_channels
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 #include "image_load.h"
+#include "stb_image.h" // stbi_uc
 
 #define PF_MEM_SIZE (64 * 1024)
 
@@ -54,14 +52,14 @@ struct Present_List_Node {
     Present_List_Node* parent; // this is not the prev->prev of next!
 };
 
-struct list_node_text {
+struct List_Node_Text {
     Present_List_Node hdr;
     
     unsigned text_length;
     const char* text;
 };
 
-struct list_node_image {
+struct List_Node_Image {
     Present_List_Node hdr;
     int path_len;
     const char* path;
@@ -70,12 +68,12 @@ struct list_node_image {
     Promised_Image* promise;
 };
 
-struct present_slide {
+struct Present_Slide {
     int chapter_title_len;
     const char* chapter_title; // optional
     int subtitle_len;
     const char* subtitle; // optional
-    present_slide* next;
+    Present_Slide* next;
     
     Present_List_Node* content;
     Present_List_Node* content_cur;
@@ -93,8 +91,8 @@ struct Present_File {
     // Slides
     int slide_count;
     int current_slide;
-    present_slide* slides;
-    present_slide* current_slide_data;
+    Present_Slide* slides;
+    Present_Slide* current_slide_data;
     
     const char* font_title; // Font used on the title slide
     const char* font_chapter; // Font used for chapter title
@@ -111,8 +109,8 @@ struct Present_File {
 };
 
 struct Parse_State {
-    present_slide* first;
-    present_slide* last;
+    Present_Slide* first;
+    Present_Slide* last;
     
     int current_chapter_title_len;
     const char* current_chapter_title;
@@ -183,7 +181,7 @@ static bool IsDirective(const char** dirout, unsigned* dirlen, const char* buf, 
 
 static void AppendSlide(Present_File* file, Parse_State* state) {
     assert(file && state);
-    present_slide* next_slide = (present_slide*)Arena_Alloc(file->mem, sizeof(present_slide));
+    Present_Slide* next_slide = (Present_Slide*)Arena_Alloc(file->mem, sizeof(Present_Slide));
     next_slide->chapter_title = state->current_chapter_title;
     next_slide->chapter_title_len = state->current_chapter_title_len;
     next_slide->subtitle = NULL;
@@ -343,14 +341,14 @@ static void SwapRedBlueChannels(uint8_t* rgba_buffer, unsigned width, unsigned h
 
 static void AddInlineImage(Present_File* file, Parse_State* state, int indent_level, const char* path, unsigned path_len, Image_Alignment alignment) {
     char* prev_workdir = NULL;
-    list_node_image* node;
+    List_Node_Image* node;
     char full_path_buf[PATH_MAX];
     auto slide = state->last;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
     assert(slide);
-    node = (list_node_image*)Arena_Alloc(file->mem, sizeof(list_node_image));
+    node = (List_Node_Image*)Arena_Alloc(file->mem, sizeof(List_Node_Image));
     node->hdr.type = LNODE_IMAGE;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->alignment = alignment;
@@ -417,7 +415,7 @@ static void AppendToList(Present_File* file, Parse_State* state, int indent_leve
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
     assert(slide);
-    auto node = (list_node_text*)Arena_Alloc(file->mem, sizeof(list_node_text));
+    auto node = (List_Node_Text*)Arena_Alloc(file->mem, sizeof(List_Node_Text));
     node->hdr.type = LNODE_TEXT;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->text_length = linelen;
@@ -725,7 +723,7 @@ static void PreloadImages(Present_File* file, Present_List_Node* node) {
     auto cur = node;
     while(cur) {
         if(cur->type == LNODE_IMAGE) {
-            list_node_image* img = (list_node_image*)cur;
+            List_Node_Image* img = (List_Node_Image*)cur;
             img->promise = ImageLoader_Request(img->path);
         }
         if(cur->children) {
@@ -741,7 +739,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
     while(cur) {
         if(cur->type == LNODE_TEXT) {
             RQ_Draw_Text* cmd = NULL;
-            list_node_text* text = (list_node_text*)cur;
+            List_Node_Text* text = (List_Node_Text*)cur;
             cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = VIRTUAL_X(state.x);
             cmd->y = VIRTUAL_Y(state.y);
@@ -755,7 +753,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
             RQ_Draw_Image* cmd = NULL;
             int w, h;
             void *pixbuf_final;
-            list_node_image* img = (list_node_image*)cur;
+            List_Node_Image* img = (List_Node_Image*)cur;
             cmd = RQ_NewCmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
             
             assert(img->promise != NULL);
@@ -811,7 +809,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
     state.x -= 24;
 }
 
-static void PresentFillRQRegularSlide(Present_File* file, present_slide* slide, Render_Queue* rq) {
+static void PresentFillRQRegularSlide(Present_File* file, Present_Slide* slide, Render_Queue* rq) {
     List_Processor_State lps = {8, 160, 80};
     RQ_Draw_Text* cmd = NULL;
     RQ_Draw_Rect* rect = NULL;
