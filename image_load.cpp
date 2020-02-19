@@ -33,6 +33,7 @@ using Unique_Lock = std::unique_lock<std::mutex>;
 using Thread = std::thread;
 using Cond_Var = std::condition_variable;
 
+#if __cplusplus <= 201703L
 struct Counting_Semaphore {
     public:
     void release() {
@@ -57,6 +58,10 @@ struct Counting_Semaphore {
     Cond_Var cv;
     unsigned long count;
 };
+#else
+#include <semaphore>
+using Counting_Semaphore = std::counting_semaphore;
+#endif
 
 struct Promised_Image {
     Promised_Image(std::string&& path)
