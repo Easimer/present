@@ -143,7 +143,9 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 HBRUSH brRect = CreateSolidBrush(RGB(r, g, b));
                 SelectObject(hDC, brRect);
                 SelectObject(hDC, disp->penInvis);
-                Rectangle(hDC, x0, y0, x1, y1);
+                
+                // NOTE(easimer): as per MSDN: "The rectangle that is drawn excludes the bottom and right edges." Thus we need to add +1 to the bottom-right coordinate
+                Rectangle(hDC, x0, y0, x1 + 1, y1 + 1);
                 DeleteObject(brRect);
                 break;
             }
@@ -338,7 +340,7 @@ bool Display_FetchEvent(Display* disp, Display_Event& out) {
     if(disp) {
         disp->ev_res = false;
         disp->ev_out = &out;
-        if(PeekMessageA(&msg, disp->wnd, 0, 0, PM_REMOVE)) {
+        if(GetMessageA(&msg, disp->wnd, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
