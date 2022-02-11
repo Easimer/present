@@ -53,6 +53,8 @@ struct Display {
     Render_Queue* rq;
 };
 
+void Display_ExecuteCommandLine(Display* disp, const char* cmdline);
+
 static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const Render_Queue* rq) {
     assert(rClient && rq);
     
@@ -129,10 +131,11 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 (void)x, (void)y, (void)w, (void)h;
                 
                 SetStretchBltMode(hDC, HALFTONE);
+                float aspect = dimg->h / dimg->w;
                 int destW = (int)(disp->s_width * dimg->w);
-                int destH = (int)(disp->s_height * dimg->h);
-                StretchBlt(hDC, x, y, destW, destH, hDibDC, 0, 0, dimg->width, dimg->height, SRCCOPY); 
-                
+                int destH = (int)(disp->s_height * aspect);
+                StretchBlt(hDC, x, y, destW, destH, hDibDC, 0, 0, dimg->width, dimg->height, SRCCOPY);
+
                 ReleaseDC(disp->wnd, hDibDC);
                 break;
             }
@@ -151,6 +154,11 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 // NOTE(easimer): as per MSDN: "The rectangle that is drawn excludes the bottom and right edges." Thus we need to add +1 to the bottom-right coordinate
                 Rectangle(hDC, x0, y0, x1 + 1, y1 + 1);
                 DeleteObject(brRect);
+                break;
+            }
+            case RQCMD_EXEC_CMDLINE: {
+                RQ_Exec_CmdLine* exec = (RQ_Exec_CmdLine*)cur;
+                Display_ExecuteCommandLine(disp, exec->cmdline);
                 break;
             }
         }
@@ -246,7 +254,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                     *disp->ev_out = DISPEV_FOCUS;
                 }
             }
-            break;
+            return 0;
         }
     }
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
@@ -398,4 +406,17 @@ void Display_Focus(Display* display) {
     SetFocus(display->wnd);
     SetActiveWindow(display->wnd);
     AttachThreadInput(dwCurID, dwMyID, FALSE);
+}
+
+void Display_ExecuteCommandLine(Display* display, const char* cmdline) {
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+
+    if(!CreateProcessA(NULL, (LPSTR)cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        DWORD dwLastError = GetLastError();
+        fprintf(stderr, "Failed to execute command line '%s' code %u\n", cmdline, dwLastError);
+    }
 }

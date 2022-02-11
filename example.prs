@@ -40,3 +40,7 @@
 #SLIDE
     #SUBTITLE Penultimate slide
 	- Ünícödé chäräcters
+
+#SLIDE
+    - I will open notepad
+#EXECUTE notepad

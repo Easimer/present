@@ -31,8 +31,9 @@
 
 enum List_Node_Type {
     LNODE_INVALID = 0,
-    LNODE_TEXT = 1,
-    LNODE_IMAGE = 2,
+    LNODE_TEXT,
+    LNODE_IMAGE,
+    LNODE_EXEC_CMDLINE,
     LNODE_MAX
 };
 
@@ -66,6 +67,13 @@ struct List_Node_Image {
     Image_Alignment alignment;
     
     Promised_Image* promise;
+};
+
+struct List_Node_Execute_Program {
+    Present_List_Node hdr;
+
+    unsigned command_line_len;
+    const char *command_line;
 };
 
 struct Present_Slide {
@@ -496,6 +504,38 @@ static void SetColor(Present_File* file, RGBA_Color* dst, const char* col, unsig
     }
 }
 
+static void AddProgramExecution(Present_File* file, Parse_State* state, const char* command_line, unsigned command_line_len) {
+    assert(file && state && command_line && command_line_len > 0);
+    if(!(file && state && command_line && command_line_len > 0)) {
+        return;
+    }
+
+
+    auto slide = state->last;
+    if(!slide) {
+        fprintf(stderr, "No #SLIDE directive before content!\n");
+        return;
+    }
+
+    assert(slide);
+
+    auto node = (List_Node_Execute_Program*)Arena_Alloc(file->mem, sizeof(List_Node_Execute_Program));
+    node->hdr.type = LNODE_EXEC_CMDLINE;
+    node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
+    node->command_line_len = command_line_len;
+    char* buf = (char*)Arena_Alloc(file->mem, command_line_len + 1);
+    memcpy(buf, command_line, command_line_len);
+    buf[command_line_len] = 0;
+    node->command_line = buf;
+
+    if(slide->content_cur) {
+        slide->content_cur->next = (Present_List_Node*)node;
+        slide->content_cur = (Present_List_Node*)node;
+    } else {
+        slide->content = slide->content_cur = (Present_List_Node*)node;
+    }
+}
+
 static bool ParseFile(Present_File* file, FILE* f) {
     bool ret = true;
     unsigned line_length;
@@ -560,6 +600,8 @@ static bool ParseFile(Present_File* file, FILE* f) {
                             SetColor(file, &file->color_bg_header, directive_arg, directive_arg_len);
                         } else if(strncmp(directive, "COLOR_FG_HEADER", directive_len) == 0) {
                             SetColor(file, &file->color_fg_header, directive_arg, directive_arg_len);
+                        } else if(strncmp(directive, "EXECUTE", directive_len) == 0) {
+                            AddProgramExecution(file, &pstate, directive_arg, directive_arg_len);
                         } else {
                             fprintf(stderr, "Warning: unknown directive: '%.*s'\n",
                                     directive_len, directive);
@@ -799,6 +841,10 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                 cmd->width = cmd->height = 0;
                 cmd->buffer = NULL;
             }
+        } else if(cur->type == LNODE_EXEC_CMDLINE) {
+            RQ_Exec_CmdLine* cmd = NULL;
+            cmd = RQ_NewCmd<RQ_Exec_CmdLine>(rq, RQCMD_EXEC_CMDLINE);
+            cmd->cmdline = ((List_Node_Execute_Program*)cur)->command_line;
         }
         if(cur->children) {
             state.x += 24;

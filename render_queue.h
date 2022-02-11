@@ -29,6 +29,8 @@ enum RQ_Cmd {
     RQCMD_DRAW_IMAGE,
     // Draw a rectangle
     RQCMD_DRAW_RECTANGLE,
+    // Execute a command line
+    RQCMD_EXEC_CMDLINE,
     RQCMD_MAX
 };
 
@@ -69,6 +71,13 @@ struct RQ_Draw_Rect {
     RQ_Draw_Cmd hdr;
     float x0, y0, x1, y1; // [0, 1] normalized ss coords
     RGBA_Color color;
+};
+
+// Executes a command line
+struct RQ_Exec_CmdLine {
+    RQ_Draw_Cmd hdr;
+    const char* cmdline;
+    bool is_already_executed;
 };
 
 // Render queue

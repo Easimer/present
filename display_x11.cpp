@@ -276,3 +276,7 @@ bool Display_SwapRedBlueChannels() {
 void Display_Focus(Display* display) {
     // TODO(danielm): implement
 }
+
+void Display_ExecuteCommandLine(Display* display, const char* cmdline) {
+    // TODO(danielm): implement
+}

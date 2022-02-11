@@ -42,6 +42,7 @@ static void RenderLoop(const char* filename) {
                 // Wait for an event
                 if(Display_FetchEvent(disp, ev)) {
                     int f;
+                    bool redraw = true;
                     switch(ev) {
                         case DISPEV_PREV:
                         f = Present_Seek(file, -1);
@@ -62,24 +63,27 @@ static void RenderLoop(const char* filename) {
                         break;
                         case DISPEV_FOCUS:
                         Display_Focus(disp);
+                        redraw = false;
                         break;
                         default:
                         assert(0);
                         break;
+                        }
+                    if(redraw) {
+                        // Allocate an empty render buffer
+                        rq = RQ_Alloc();
+                        // Only re-render if something happened
+                        Present_FillRenderQueue(file, rq);
+                        // Display render queue
+                        Display_RenderQueue(disp, rq);
+                        // Free render queue
+                        RQ_Free(rq);
+                        // NOTE(easimer): previously we allocated an RQ once at startup
+                        // then used that at every redraw, clearing it after the 
+                        // DisplayRenderQueue call. But due to images, render queues
+                        // can get quite large and we don't want to hold megabytes of memory 
+                        // hostage while not even using it.
                     }
-                    // Allocate an empty render buffer
-                    rq = RQ_Alloc();
-                    // Only re-render if something happened
-                    Present_FillRenderQueue(file, rq);
-                    // Display render queue
-                    Display_RenderQueue(disp, rq);
-                    // Free render queue
-                    RQ_Free(rq);
-                    // NOTE(easimer): previously we allocated an RQ once at startup
-                    // then used that at every redraw, clearing it after the 
-                    // DisplayRenderQueue call. But due to images, render queues
-                    // can get quite large and we don't want to hold megabytes of memory 
-                    // hostage while not even using it.
                 }
             }
             Display_Close(disp);
