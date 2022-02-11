@@ -32,6 +32,10 @@ using namespace Gdiplus;
 // WPARAM and LPARAM are always zero.
 #define WM_JUMPSTART (WM_USER + 0x0000)
 
+#define HOTKEY_FOCUS (0)
+#define HOTKEY_FOCUS_VK (0x46) // F key
+#define HOTKEY_FOCUS_FLAGS (MOD_SHIFT | MOD_ALT)
+
 struct Display {
     HWND wnd;
     
@@ -232,6 +236,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             }
             break;
         }
+        case WM_HOTKEY: {
+            auto flags = LOWORD(lParam);
+            auto vk = HIWORD(lParam);
+            printf("win32: received hotkey event %x %x\n", vk, flags);
+            if (vk == HOTKEY_FOCUS_VK && ((flags & HOTKEY_FOCUS_FLAGS) == HOTKEY_FOCUS_FLAGS)) {
+                if(disp->ev_out) {
+                    disp->ev_res = true;
+                    *disp->ev_out = DISPEV_FOCUS;
+                }
+            }
+            break;
+        }
     }
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }
@@ -317,7 +333,9 @@ struct Display* Display_Open() {
         UpdateWindow(ret->wnd);
         ret->penBlack = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
         ret->penInvis = CreatePen(PS_NULL, 1, RGB(0, 0, 0));
-        
+
+        RegisterHotKey(ret->wnd, HOTKEY_FOCUS, HOTKEY_FOCUS_FLAGS, HOTKEY_FOCUS_VK);
+
         PostMessage(ret->wnd, WM_JUMPSTART, 0, 0);
     }
     
@@ -363,4 +381,21 @@ void Display_RenderQueue(Display* disp, Render_Queue* rq) {
 
 bool Display_SwapRedBlueChannels() {
     return true;
+}
+
+void Display_Focus(Display* display) {
+    if(!display) {
+        return;
+    }
+
+    HWND hCurWnd = GetForegroundWindow();
+    DWORD dwMyID = GetCurrentThreadId();
+    DWORD dwCurID = GetWindowThreadProcessId(hCurWnd, NULL);
+    AttachThreadInput(dwCurID, dwMyID, TRUE);
+    SetWindowPos(display->wnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+    SetWindowPos(display->wnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
+    SetForegroundWindow(display->wnd);
+    SetFocus(display->wnd);
+    SetActiveWindow(display->wnd);
+    AttachThreadInput(dwCurID, dwMyID, FALSE);
 }

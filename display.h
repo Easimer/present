@@ -37,6 +37,8 @@ enum Display_Event {
     DISPEV_END,
     // User wants to exit
     DISPEV_EXIT,
+    // User wants to focus the main window
+    DISPEV_FOCUS,
     // Invalid event
     DISPEV_MAX
 };
@@ -64,3 +66,5 @@ void Display_RenderQueue(Display* display, Render_Queue* rq);
 // have their red and blue channels swapped.
 // Used in present.cpp when loading an image.
 bool Display_SwapRedBlueChannels();
+
+void Display_Focus(Display* display);

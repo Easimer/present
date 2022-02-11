@@ -272,3 +272,7 @@ void Display_RenderQueue(Display* disp, Render_Queue* rq) {
 bool Display_SwapRedBlueChannels() {
     return true;
 }
+
+void Display_Focus(Display* display) {
+    // TODO(danielm): implement
+}

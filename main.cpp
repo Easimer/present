@@ -60,6 +60,9 @@ static void RenderLoop(const char* filename) {
                         break;
                         case DISPEV_NONE:
                         break;
+                        case DISPEV_FOCUS:
+                        Display_Focus(disp);
+                        break;
                         default:
                         assert(0);
                         break;
