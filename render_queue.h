@@ -48,7 +48,6 @@ struct RQ_Draw_Text {
     RQ_Draw_Cmd hdr;
     float x, y; // text position [0,1] normalized
     float size; // text height in percentage of screen height
-    int text_len;
     const char* text;
     RGBA_Color color;
     

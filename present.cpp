@@ -59,15 +59,13 @@ struct Present_List_Node {
 struct List_Node_Text {
     Present_List_Node hdr;
     
-    unsigned text_length;
-    const char* text;
+    Mem_Arena_Offset text;
 
     float scale;
 };
 
 struct List_Node_Image {
     Present_List_Node hdr;
-    int path_len;
     const char* path;
     Image_Alignment alignment;
     
@@ -75,11 +73,8 @@ struct List_Node_Image {
 };
 
 struct Present_Slide {
-    int chapter_title_len;
     const char* chapter_title; // optional
-    int subtitle_len;
     const char* subtitle; // optional
-    int exec_cmdline_len;
     const char* exec_cmdLine; // optional
     Present_Slide* next;
     
@@ -193,7 +188,6 @@ static void AppendSlide(Present_File* file, Parse_State* state) {
     next_slide->content = MEM_ARENA_INVALID_OFFSET;
     next_slide->content_cur = MEM_ARENA_INVALID_OFFSET;
     next_slide->chapter_title = state->current_chapter_title;
-    next_slide->chapter_title_len = state->current_chapter_title_len;
     next_slide->subtitle = nullptr;
     next_slide->next = nullptr;
     next_slide->exec_cmdLine = nullptr;
@@ -404,10 +398,8 @@ static void AddInlineImage(Present_File* file, Parse_State* state, int indent_le
     if(P_Realpath(path, full_path_buf)) {
         unsigned len = (unsigned)strlen(full_path_buf);
         ptrNode->path = (char*)Arena_Alloc(file->mem, len + 1);
-        ptrNode->path_len = len;
         memcpy((char*)ptrNode->path, full_path_buf, len + 1);
     } else {
-        ptrNode->path_len = 0;
         ptrNode->path = nullptr;
     }
     
@@ -423,7 +415,6 @@ static void SetSubtitle(Present_File* file, Parse_State* state, const char* titl
         fprintf(stderr, "No #SLIDE directive before #SUBTITLE!\n");
     }
     assert(slide);
-    slide->subtitle_len = title_len;
     char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
     memcpy(buf, title, title_len);
     buf[title_len] = 0;
@@ -440,12 +431,12 @@ static void AppendToList(Present_File* file, Parse_State* state, int indent_leve
     auto ptrNode = RESOLVE_OFFSET(offNode, file->mem, List_Node_Text);
     ptrNode->hdr.type = LNODE_TEXT;
     ptrNode->hdr.next = ptrNode->hdr.children = ptrNode->hdr.parent = MEM_ARENA_INVALID_OFFSET;
-    ptrNode->text_length = linelen;
     ptrNode->scale = textScale;
-    char* buf = (char*)Arena_Alloc(file->mem, linelen + 1);
-    memcpy(buf, line, linelen);
-    buf[linelen] = 0;
-    ptrNode->text = buf;
+    auto offBuf = Arena_AllocEx(file->mem, linelen + 1);
+    auto* ptrBuf = RESOLVE_OFFSET(offBuf, file->mem, char);
+    memcpy(ptrBuf, line, linelen);
+    ptrBuf[linelen] = 0;
+    ptrNode->text = offBuf;
     
     AppendNode(file, slide, indent_level, offNode);
 }
@@ -517,7 +508,6 @@ static void AddProgramExecution(Present_File* file, Parse_State* state, const ch
     memcpy(buf, command_line, command_line_len);
     buf[command_line_len] = 0;
     slide->exec_cmdLine = buf;
-    slide->exec_cmdline_len = command_line_len;
 
     AppendToList(file, state, slide->current_indent_level, command_line, command_line_len, TEXT_SCALE_EXEC);
 }
@@ -719,7 +709,6 @@ static void PresentFillRQTitleSlide(Present_File* file, Render_Queue* rq) {
         title->x = VIRTUAL_X(24);
         title->y = VIRTUAL_Y((720 - 72) / 2);
         title->size = VIRTUAL_Y(72);
-        title->text_len = file->title_len;
         title->text = file->title;
         title->font_name = file->font_title;
         title->color = file->color_fg;
@@ -730,7 +719,6 @@ static void PresentFillRQTitleSlide(Present_File* file, Render_Queue* rq) {
         authors->x = VIRTUAL_X(36);
         authors->y = VIRTUAL_Y((720 + 20) / 2);
         authors->size = VIRTUAL_Y(20);
-        authors->text_len = file->authors_len;
         authors->text = file->authors;
         authors->font_name = file->font_title;
         authors->color = file->color_fg;
@@ -774,8 +762,7 @@ static void ProcessListElement(Present_File* file, Mem_Arena_Offset offNode, Ren
             cmd->x = VIRTUAL_X(state.x);
             cmd->y = VIRTUAL_Y(state.y);
             cmd->size = text->scale * VIRTUAL_Y(32);
-            cmd->text_len = text->text_length;
-            cmd->text = text->text;
+            cmd->text = RESOLVE_OFFSET(text->text, file->mem, char);
             cmd->font_name = file->font_general;
             cmd->color = file->color_fg;
             state.y += 40;
@@ -856,7 +843,6 @@ static void PresentFillRQRegularSlide(Present_File* file, Present_Slide* slide, 
         cmd->x = VIRTUAL_X(10);
         cmd->y = VIRTUAL_Y(64);
         cmd->size = VIRTUAL_Y(64);
-        cmd->text_len = slide->chapter_title_len;
         cmd->text = slide->chapter_title;
         cmd->font_name = file->font_chapter;
         cmd->color = file->color_fg_header;
@@ -865,7 +851,6 @@ static void PresentFillRQRegularSlide(Present_File* file, Present_Slide* slide, 
         cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
         cmd->x = VIRTUAL_X(10); cmd->y = VIRTUAL_Y(120);
         cmd->size = VIRTUAL_Y(44);
-        cmd->text_len = slide->subtitle_len;
         cmd->text = slide->subtitle;
         cmd->font_name = file->font_general;
         cmd->color = file->color_fg;
@@ -877,8 +862,7 @@ static void PresentFillRQRegularSlide(Present_File* file, Present_Slide* slide, 
     cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
     int slide_num_len = snprintf(nullptr, 0, "%d / %d", file->current_slide, file->slide_count);
     cmd->text = (char*)Arena_Alloc(rq->mem, slide_num_len + 1);
-    cmd->text_len = slide_num_len;
-    snprintf((char*)cmd->text, cmd->text_len + 1, "%d / %d", file->current_slide, file->slide_count);
+    snprintf((char*)cmd->text, slide_num_len + 1, "%d / %d", file->current_slide, file->slide_count);
     cmd->x = VIRTUAL_X(1280 - 50);
     cmd->y = VIRTUAL_Y(720 - 18);
     cmd->size = VIRTUAL_Y(18);
