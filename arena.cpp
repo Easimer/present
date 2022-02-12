@@ -23,8 +23,6 @@
 struct Mem_Arena {
     unsigned size;
     unsigned used;
-    uint8_t* cursor;
-    uint8_t* content;
 };
 
 Mem_Arena* Arena_Create(unsigned size) {
@@ -36,7 +34,6 @@ Mem_Arena* Arena_Create(unsigned size) {
         memset(ret, 0, sizeof(Mem_Arena) + size);
         ret->size = size;
         ret->used = 0;
-        ret->content = ret->cursor = (uint8_t*)(ret + 1);
     }
     
     return ret;
@@ -53,22 +50,11 @@ void Arena_Clear(Mem_Arena* arena) {
     assert(arena);
     if(arena) {
         arena->used = 0;
-        arena->cursor = arena->content;
     }
 }
 
 void* Arena_Alloc(Mem_Arena* arena, unsigned size) {
-    void* ret = NULL;
-    assert(arena && size > 0 && arena->size - arena->used >= size);
-    // - Arena must exist
-    // - Size must be non-zero
-    // - Atleast 'size' bytes must be available
-    if(arena && size > 0 && arena->size - arena->used >= size) {
-        ret = arena->cursor;
-        arena->cursor += size;
-        arena->used += size;
-    }
-    return ret;
+    return Arena_Resolve(arena, Arena_AllocEx(arena, size));
 }
 
 unsigned Arena_Used(Mem_Arena* arena) {
@@ -87,4 +73,24 @@ unsigned Arena_Size(Mem_Arena* arena) {
         ret = arena->size;
     }
     return ret;
+}
+
+Mem_Arena_Offset Arena_AllocEx(Mem_Arena* arena, unsigned size) {
+    Mem_Arena_Offset ret;
+    if(!(arena && size > 0 && arena->size - arena->used >= size)) {
+        abort();
+    }
+
+    ret = arena->used;
+    arena->used += size;
+
+    return ret;
+}
+
+void* Arena_Resolve(Mem_Arena* arena, Mem_Arena_Offset idx) {
+    if(!arena || idx >= arena->size) {
+        abort();
+    }
+
+    return ((uint8_t*)(arena + 1)) + idx;
 }

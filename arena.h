@@ -17,8 +17,12 @@
 
 #pragma once
 
+#include <cstdint>
+
 // A handle to a memory arena
 struct Mem_Arena;
+
+using Mem_Arena_Offset = uint32_t;
 
 // Creates a new area of a given size
 Mem_Arena* Arena_Create(unsigned size);
@@ -30,6 +34,7 @@ void Arena_Destroy(Mem_Arena* arena);
 void Arena_Clear(Mem_Arena* arena);
 
 // Allocates a block in the arena, returning it's address
+[[deprecated]]
 void* Arena_Alloc(Mem_Arena* arena, unsigned size);
 
 // Returns how many bytes have been allocated in the arena
@@ -37,3 +42,7 @@ unsigned Arena_Used(Mem_Arena* arena);
 
 // Returns how big is the arena
 unsigned Arena_Size(Mem_Arena* arena);
+
+Mem_Arena_Offset Arena_AllocEx(Mem_Arena* arena, unsigned size);
+
+void* Arena_Resolve(Mem_Arena* arena, Mem_Arena_Offset idx);
