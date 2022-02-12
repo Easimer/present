@@ -31,6 +31,8 @@
 #define TEXT_SCALE_NORMAL (1.0f)
 #define TEXT_SCALE_EXEC (0.5f)
 
+#define RESOLVE_OFFSET(offset, arena, type) ((type*)Arena_Resolve((arena), (offset)))
+
 enum List_Node_Type {
     LNODE_INVALID = 0,
     LNODE_TEXT,
@@ -49,9 +51,9 @@ enum Image_Alignment {
 
 struct Present_List_Node {
     List_Node_Type type;
-    Present_List_Node* next;
-    Present_List_Node* children;
-    Present_List_Node* parent; // this is not the prev->prev of next!
+    Mem_Arena_Offset next;
+    Mem_Arena_Offset children;
+    Mem_Arena_Offset parent; // this is not the prev->prev of next!
 };
 
 struct List_Node_Text {
@@ -81,8 +83,8 @@ struct Present_Slide {
     const char* exec_cmdLine; // optional
     Present_Slide* next;
     
-    Present_List_Node* content;
-    Present_List_Node* content_cur;
+    Mem_Arena_Offset content;
+    Mem_Arena_Offset content_cur;
     int current_indent_level;
 };
 
@@ -169,7 +171,7 @@ static bool IsDirective(const char** dirout, unsigned* dirlen, const char* buf, 
     assert(buf && buflen > 0 && dirout && dirlen);
     
     if(buf && buflen > 0) {
-        *dirout = NULL;
+        *dirout = nullptr;
         *dirlen = 0;
         if(buf[0] == '#') {
             ret = true;
@@ -188,13 +190,15 @@ static bool IsDirective(const char** dirout, unsigned* dirlen, const char* buf, 
 static void AppendSlide(Present_File* file, Parse_State* state) {
     assert(file && state);
     Present_Slide* next_slide = (Present_Slide*)Arena_Alloc(file->mem, sizeof(Present_Slide));
+    next_slide->content = MEM_ARENA_INVALID_OFFSET;
+    next_slide->content_cur = MEM_ARENA_INVALID_OFFSET;
     next_slide->chapter_title = state->current_chapter_title;
     next_slide->chapter_title_len = state->current_chapter_title_len;
-    next_slide->subtitle = NULL;
-    next_slide->next = NULL;
-    next_slide->exec_cmdLine = NULL;
+    next_slide->subtitle = nullptr;
+    next_slide->next = nullptr;
+    next_slide->exec_cmdLine = nullptr;
     //fprintf(stderr, "=== SLIDE ===\n");
-    if(state->last != NULL) {
+    if(state->last != nullptr) {
         state->last->next = next_slide;
         state->last = next_slide;
     } else {
@@ -207,7 +211,7 @@ static void SetChapterTitle(Present_File* file, Parse_State* state, const char* 
     assert(file && state && title);
     
     if(title_len == 0) {
-        state->current_chapter_title = NULL;
+        state->current_chapter_title = nullptr;
     } else {
         char* buf = (char*)Arena_Alloc(file->mem, title_len + 1);
         memcpy(buf, title, title_len);
@@ -255,7 +259,7 @@ inline int P_Chdir(const char* path) {
 }
 
 inline char* P_Getcwd(char* buf, size_t size) {
-    char* ret = NULL;
+    char* ret = nullptr;
     DWORD res;
     
     res = GetCurrentDirectory((DWORD)size, buf);
@@ -270,8 +274,8 @@ inline char* P_Getcwd(char* buf, size_t size) {
 #define PATH_MAX MAX_PATH
 
 inline char* P_Realpath(const char* path, char buf[PATH_MAX]) {
-    char* ret = NULL;
-    if(GetFullPathNameA(path, PATH_MAX, buf, NULL) > 0) {
+    char* ret = nullptr;
+    if(GetFullPathNameA(path, PATH_MAX, buf, nullptr) > 0) {
         ret = buf;
     }
     return ret;
@@ -293,14 +297,14 @@ inline char* P_Realpath(const char* path, char buf[PATH_MAX]) {
 
 static void SaveWorkDir(char** dst) {
     assert(dst);
-    char *buf = NULL, *res = NULL;
+    char *buf = nullptr, *res = nullptr;
     int bufsiz = 64;
     while(!buf) {
         buf = (char*)malloc(bufsiz);
         res = P_Getcwd(buf, bufsiz);
         if(!res) {
             free(buf);
-            buf = NULL;
+            buf = nullptr;
             bufsiz *= 2;
         }
     }
@@ -311,7 +315,7 @@ static void RestoreWorkDir(char** path) {
     int res;
     assert(path && *path);
     res = P_Chdir(*path);
-    *path = NULL;
+    *path = nullptr;
     if(res) {
         fprintf(stderr, "Failed to chdir: %s\n", strerror(errno));
     }
@@ -346,60 +350,70 @@ static void SwapRedBlueChannels(uint8_t* rgba_buffer, unsigned width, unsigned h
     }
 }
 
+static void AppendNode(Present_File* file, Present_Slide* slide, int indent_level, Mem_Arena_Offset offNode) {
+    auto* ptrNode = RESOLVE_OFFSET(offNode, file->mem, Present_List_Node);
+
+    if (slide->content_cur != MEM_ARENA_INVALID_OFFSET) {
+        auto* content_cur = RESOLVE_OFFSET(slide->content_cur, file->mem, Present_List_Node);
+        if(slide->current_indent_level < indent_level) {
+            //fprintf(stderr, "Indent IN to %d from %d\n", indent_level, slide->current_indent_level);
+            ptrNode->parent = slide->content_cur;
+            content_cur->children = offNode;
+            slide->content_cur = offNode;
+            slide->current_indent_level = indent_level;
+        } else if(slide->current_indent_level > indent_level) {
+            //fprintf(stderr, "Indent OUT to %d\n", indent_level);
+            auto offParent = content_cur->parent;
+            auto* ptrParent = RESOLVE_OFFSET(offParent, file->mem, Present_List_Node);
+            slide->content_cur = offParent;
+            ptrParent->next = offNode;
+            slide->current_indent_level = indent_level;
+        } else {
+            //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
+            content_cur->next = offNode;
+            ptrNode->parent = content_cur->parent;
+            slide->content_cur = offNode;
+        }
+    } else {
+        //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
+        slide->content = slide->content_cur = offNode;
+        slide->current_indent_level = indent_level;
+    }
+    //fprintf(stderr, "Appended image '%.*s'\n", path_len, path);
+}
+
 static void AddInlineImage(Present_File* file, Parse_State* state, int indent_level, const char* path, unsigned path_len, Image_Alignment alignment) {
-    char* prev_workdir = NULL;
-    List_Node_Image* node;
+    char* prev_workdir = nullptr;
+    Mem_Arena_Offset offNode;
+    List_Node_Image* ptrNode;
     char full_path_buf[PATH_MAX];
     auto slide = state->last;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
     assert(slide);
-    node = (List_Node_Image*)Arena_Alloc(file->mem, sizeof(List_Node_Image));
-    node->hdr.type = LNODE_IMAGE;
-    node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
-    node->alignment = alignment;
+    offNode = Arena_AllocEx(file->mem, sizeof(List_Node_Image));
+    ptrNode = RESOLVE_OFFSET(offNode, file->mem, List_Node_Image);
+    ptrNode->hdr.type = LNODE_IMAGE;
+    ptrNode->hdr.next = ptrNode->hdr.children = ptrNode->hdr.parent = MEM_ARENA_INVALID_OFFSET;
+    ptrNode->alignment = alignment;
     
     SaveWorkDir(&prev_workdir);
     ChangeToDirOfFile(file->path);
     
     if(P_Realpath(path, full_path_buf)) {
         unsigned len = (unsigned)strlen(full_path_buf);
-        node->path = (char*)Arena_Alloc(file->mem, len + 1);
-        node->path_len = len;
-        memcpy((char*)node->path, full_path_buf, len + 1);
+        ptrNode->path = (char*)Arena_Alloc(file->mem, len + 1);
+        ptrNode->path_len = len;
+        memcpy((char*)ptrNode->path, full_path_buf, len + 1);
     } else {
-        node->path_len = 0;
-        node->path = NULL;
+        ptrNode->path_len = 0;
+        ptrNode->path = nullptr;
     }
     
     RestoreWorkDir(&prev_workdir);
-    
-    if(slide->content_cur) {
-        if(slide->current_indent_level < indent_level) {
-            //fprintf(stderr, "Indent IN to %d from %d\n", indent_level, slide->current_indent_level);
-            node->hdr.parent = slide->content_cur;
-            slide->content_cur->children = (Present_List_Node*)node;
-            slide->content_cur = (Present_List_Node*) node;
-            slide->current_indent_level = indent_level;
-        } else if(slide->current_indent_level > indent_level) {
-            //fprintf(stderr, "Indent OUT to %d\n", indent_level);
-            auto parent = slide->content_cur->parent;
-            slide->content_cur = parent;
-            parent->next = (Present_List_Node*)node;
-            slide->current_indent_level = indent_level;
-        } else {
-            //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
-            slide->content_cur->next = (Present_List_Node*)node;
-            node->hdr.parent = slide->content_cur->parent;
-            slide->content_cur = (Present_List_Node*)node;
-        }
-    } else {
-        //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
-        slide->content = slide->content_cur = (Present_List_Node*)node;
-        slide->current_indent_level = indent_level;
-    }
-    //fprintf(stderr, "Appended image '%.*s'\n", path_len, path);
+
+    AppendNode(file, slide, indent_level, offNode);
 }
 
 static void SetSubtitle(Present_File* file, Parse_State* state, const char* title, unsigned title_len) {
@@ -422,42 +436,18 @@ static void AppendToList(Present_File* file, Parse_State* state, int indent_leve
         fprintf(stderr, "No #SLIDE directive before content!\n");
     }
     assert(slide);
-    auto node = (List_Node_Text*)Arena_Alloc(file->mem, sizeof(List_Node_Text));
-    node->hdr.type = LNODE_TEXT;
-    node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
-    node->text_length = linelen;
-    node->scale = textScale;
+    auto offNode = Arena_AllocEx(file->mem, sizeof(List_Node_Text));
+    auto ptrNode = RESOLVE_OFFSET(offNode, file->mem, List_Node_Text);
+    ptrNode->hdr.type = LNODE_TEXT;
+    ptrNode->hdr.next = ptrNode->hdr.children = ptrNode->hdr.parent = MEM_ARENA_INVALID_OFFSET;
+    ptrNode->text_length = linelen;
+    ptrNode->scale = textScale;
     char* buf = (char*)Arena_Alloc(file->mem, linelen + 1);
     memcpy(buf, line, linelen);
     buf[linelen] = 0;
-    node->text = buf;
+    ptrNode->text = buf;
     
-    if(slide->content_cur) {
-        if(slide->current_indent_level < indent_level) {
-            //fprintf(stderr, "Indent IN to %d\n", indent_level);
-            node->hdr.parent = slide->content_cur;
-            slide->content_cur->children = (Present_List_Node*)node;
-            slide->content_cur = (Present_List_Node*) node;
-            slide->current_indent_level = indent_level;
-        } else if(slide->current_indent_level > indent_level) {
-            //fprintf(stderr, "Indent OUT to %d\n", indent_level);
-            auto parent = slide->content_cur->parent;
-            parent->next = (Present_List_Node*)node;
-            slide->content_cur = (Present_List_Node*)node;
-            slide->current_indent_level = indent_level;
-        } else {
-            //fprintf(stderr, "Indent STAYS at %d\n", indent_level);
-            slide->content_cur->next = (Present_List_Node*)node;
-            node->hdr.parent = slide->content_cur->parent;
-            slide->content_cur = (Present_List_Node*)node;
-        }
-    } else {
-        //fprintf(stderr, "Indent ESTABLISHED at %d\n", indent_level);
-        slide->content = slide->content_cur = (Present_List_Node*)node;
-        slide->current_indent_level = indent_level;
-    }
-    
-    //fprintf(stderr, "Appended list item %.*s\n", node->text_length, node->text);
+    AppendNode(file, slide, indent_level, offNode);
 }
 
 static void SetFont(Present_File* file, const char** dst, const char* name, unsigned name_len) {
@@ -545,11 +535,11 @@ static bool ParseFile(Present_File* file, FILE* f) {
     unsigned directive_arg_len;
     Parse_State pstate;
     
-    pstate.first = pstate.last = NULL;
+    pstate.first = pstate.last = nullptr;
     
     assert(file && f);
     
-    file->font_general = file->font_title = file->font_chapter = NULL;
+    file->font_general = file->font_title = file->font_chapter = nullptr;
     
     // First line must be a '#PRESENT'
     line_length = ReadLine(line_buf, line_siz, &indent_level, f);
@@ -618,8 +608,8 @@ static bool ParseFile(Present_File* file, FILE* f) {
 }
 
 Present_File* Present_Open(const char* filename) {
-    Present_File* ret = NULL;
-    FILE* f = NULL;
+    Present_File* ret = nullptr;
+    FILE* f = nullptr;
     
     assert(filename);
     if(filename) {
@@ -629,11 +619,11 @@ Present_File* Present_Open(const char* filename) {
             if(ret) {
                 ret->path = filename;
                 ret->mem = Arena_Create(PF_MEM_SIZE);
-                ret->title = NULL;
-                ret->authors = NULL;
+                ret->title = nullptr;
+                ret->authors = nullptr;
                 ret->slide_count = 1; // implicit title slide
                 ret->current_slide = 0;
-                ret->slides = NULL;
+                ret->slides = nullptr;
                 SET_RGB(ret->color_bg, 255, 255, 255);
                 SET_RGB(ret->color_fg, 0, 0, 0);
                 SET_RGB(ret->color_bg_header, 43, 203, 186);
@@ -641,7 +631,7 @@ Present_File* Present_Open(const char* filename) {
                 if(!ParseFile(ret, f)) {
                     Arena_Destroy(ret->mem);
                     free(ret);
-                    ret = NULL;
+                    ret = nullptr;
                     
                     fprintf(stderr, "Presentation parse error!\n");
                 } else {
@@ -698,10 +688,10 @@ int Present_SeekTo(Present_File* file, int abs) {
         fprintf(stderr, "Jumping to slide %d/%d\n", abs, file->slide_count);
         if(abs < 0) {
             abs = 0;
-            file->current_slide_data = NULL;
+            file->current_slide_data = nullptr;
         } else if(abs > file->slide_count) {
             abs = file->slide_count;
-            file->current_slide_data = NULL;
+            file->current_slide_data = nullptr;
         } else {
             file->current_slide_data = file->slides;
             for(int i = 1; i < abs; i++) {
@@ -757,27 +747,29 @@ struct List_Processor_State {
     int right_y;
 };
 
-static void PreloadImages(Present_File* file, Present_List_Node* node) {
-    auto cur = node;
-    while(cur) {
-        if(cur->type == LNODE_IMAGE) {
-            List_Node_Image* img = (List_Node_Image*)cur;
+static void PreloadImages(Present_File* file, Mem_Arena_Offset offNode) {
+    auto offCur = offNode;
+    while(offCur != MEM_ARENA_INVALID_OFFSET) {
+        auto* ptrCur = RESOLVE_OFFSET(offCur, file->mem, Present_List_Node);
+        if (ptrCur->type == LNODE_IMAGE) {
+            List_Node_Image* img = (List_Node_Image*)ptrCur;
             img->promise = ImageLoader_Request(img->path);
         }
-        if(cur->children) {
-            PreloadImages(file, cur->children);
+        if(ptrCur->children != MEM_ARENA_INVALID_OFFSET) {
+            PreloadImages(file, ptrCur->children);
         }
-        cur = cur->next;
+        offCur = ptrCur->next;
     }
 }
 
-static void ProcessListElement(Present_File* file, Present_List_Node* node, Render_Queue* rq,
+static void ProcessListElement(Present_File* file, Mem_Arena_Offset offNode, Render_Queue* rq,
                                List_Processor_State& state) {
-    auto cur = node;
-    while(cur) {
-        if(cur->type == LNODE_TEXT) {
-            RQ_Draw_Text* cmd = NULL;
-            List_Node_Text* text = (List_Node_Text*)cur;
+    auto offCur = offNode;
+    while(offCur != MEM_ARENA_INVALID_OFFSET) {
+        auto* ptrCur = RESOLVE_OFFSET(offCur, file->mem, Present_List_Node);
+        if (ptrCur->type == LNODE_TEXT) {
+            RQ_Draw_Text* cmd = nullptr;
+            List_Node_Text* text = (List_Node_Text*)ptrCur;
             cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = VIRTUAL_X(state.x);
             cmd->y = VIRTUAL_Y(state.y);
@@ -787,14 +779,14 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
             cmd->font_name = file->font_general;
             cmd->color = file->color_fg;
             state.y += 40;
-        } else if(cur->type == LNODE_IMAGE) {
-            RQ_Draw_Image* cmd = NULL;
+        } else if (ptrCur->type == LNODE_IMAGE) {
+            RQ_Draw_Image* cmd = nullptr;
             int w, h;
             void *pixbuf_final;
-            List_Node_Image* img = (List_Node_Image*)cur;
+            List_Node_Image* img = (List_Node_Image*)ptrCur;
             cmd = RQ_NewCmd<RQ_Draw_Image>(rq, RQCMD_DRAW_IMAGE);
             
-            assert(img->promise != NULL);
+            assert(img->promise != nullptr);
             auto limg = ImageLoader_Await(img->promise);
             if(limg) {
                 // TODO(easimer): this copy shouldn't be needed
@@ -809,7 +801,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                 cmd->h = ((float)h / (float)w) * 0.5f;
                 cmd->buffer = pixbuf_final;
                 ImageLoader_Free(limg);
-                img->promise = NULL;
+                img->promise = nullptr;
                 
                 switch(img->alignment) {
                     case IMGALIGN_RIGHT:
@@ -835,22 +827,22 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
             } else {
                 fprintf(stderr, "Couldn't load image '%s'\n", img->path);
                 cmd->width = cmd->height = 0;
-                cmd->buffer = NULL;
+                cmd->buffer = nullptr;
             }
         }
-        if(cur->children) {
+        if(ptrCur->children != MEM_ARENA_INVALID_OFFSET) {
             state.x += 24;
-            ProcessListElement(file, cur->children, rq, state);
+            ProcessListElement(file, ptrCur->children, rq, state);
         }
-        cur = cur->next;
+        offCur = ptrCur->next;
     }
     state.x -= 24;
 }
 
 static void PresentFillRQRegularSlide(Present_File* file, Present_Slide* slide, Render_Queue* rq) {
     List_Processor_State lps = {8, 160, 80};
-    RQ_Draw_Text* cmd = NULL;
-    RQ_Draw_Rect* rect = NULL;
+    RQ_Draw_Text* cmd = nullptr;
+    RQ_Draw_Rect* rect = nullptr;
     
     PresentClearScreen(file, rq, file->color_bg.r, file->color_bg.g, file->color_bg.b);
     
@@ -883,7 +875,7 @@ static void PresentFillRQRegularSlide(Present_File* file, Present_Slide* slide, 
     ProcessListElement(file, slide->content, rq, lps);
     
     cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
-    int slide_num_len = snprintf(NULL, 0, "%d / %d", file->current_slide, file->slide_count);
+    int slide_num_len = snprintf(nullptr, 0, "%d / %d", file->current_slide, file->slide_count);
     cmd->text = (char*)Arena_Alloc(rq->mem, slide_num_len + 1);
     cmd->text_len = slide_num_len;
     snprintf((char*)cmd->text, cmd->text_len + 1, "%d / %d", file->current_slide, file->slide_count);
@@ -925,7 +917,7 @@ void Present_ExecuteCommandOnCurrentSlide(Present_File* file) {
     memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
 
-    if(!CreateProcessA(NULL, (LPSTR)cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+    if(!CreateProcessA(nullptr, (LPSTR)cmdline, nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi)) {
         DWORD dwLastError = GetLastError();
         fprintf(stderr, "Failed to execute command line '%s' code %u\n", cmdline, dwLastError);
     }
