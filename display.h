@@ -39,6 +39,8 @@ enum Display_Event {
     DISPEV_EXIT,
     // User wants to focus the main window
     DISPEV_FOCUS,
+    // User wants to execute the command line on the current slide
+    DISPEV_EXEC,
     // Invalid event
     DISPEV_MAX
 };

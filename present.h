@@ -40,3 +40,5 @@ int Present_SeekTo(Present_File* file, int idx);
 
 // Fill a render queue with draw commands
 void Present_FillRenderQueue(Present_File* file, Render_Queue* rq);
+
+void Present_ExecuteCommandOnCurrentSlide(Present_File* file);

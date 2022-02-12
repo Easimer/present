@@ -156,11 +156,6 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 DeleteObject(brRect);
                 break;
             }
-            case RQCMD_EXEC_CMDLINE: {
-                RQ_Exec_CmdLine* exec = (RQ_Exec_CmdLine*)cur;
-                Display_ExecuteCommandLine(disp, exec->cmdline);
-                break;
-            }
         }
         cur = cur->next;
     }
@@ -220,6 +215,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                     break;
                     case VK_ESCAPE:
                     *disp->ev_out = DISPEV_EXIT;
+                    break;
+                    case 'E':
+                    *disp->ev_out = DISPEV_EXEC;
                     break;
                     default:
                     disp->ev_res = false;
@@ -406,17 +404,4 @@ void Display_Focus(Display* display) {
     SetFocus(display->wnd);
     SetActiveWindow(display->wnd);
     AttachThreadInput(dwCurID, dwMyID, FALSE);
-}
-
-void Display_ExecuteCommandLine(Display* display, const char* cmdline) {
-    STARTUPINFOA si;
-    PROCESS_INFORMATION pi;
-
-    memset(&si, 0, sizeof(si));
-    si.cb = sizeof(si);
-
-    if(!CreateProcessA(NULL, (LPSTR)cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-        DWORD dwLastError = GetLastError();
-        fprintf(stderr, "Failed to execute command line '%s' code %u\n", cmdline, dwLastError);
-    }
 }

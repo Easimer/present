@@ -28,12 +28,13 @@
 #include "stb_image.h" // stbi_uc
 
 #define PF_MEM_SIZE (64 * 1024)
+#define TEXT_SCALE_NORMAL (1.0f)
+#define TEXT_SCALE_EXEC (0.5f)
 
 enum List_Node_Type {
     LNODE_INVALID = 0,
     LNODE_TEXT,
     LNODE_IMAGE,
-    LNODE_EXEC_CMDLINE,
     LNODE_MAX
 };
 
@@ -58,6 +59,8 @@ struct List_Node_Text {
     
     unsigned text_length;
     const char* text;
+
+    float scale;
 };
 
 struct List_Node_Image {
@@ -69,18 +72,13 @@ struct List_Node_Image {
     Promised_Image* promise;
 };
 
-struct List_Node_Execute_Program {
-    Present_List_Node hdr;
-
-    unsigned command_line_len;
-    const char *command_line;
-};
-
 struct Present_Slide {
     int chapter_title_len;
     const char* chapter_title; // optional
     int subtitle_len;
     const char* subtitle; // optional
+    int exec_cmdline_len;
+    const char* exec_cmdLine; // optional
     Present_Slide* next;
     
     Present_List_Node* content;
@@ -194,6 +192,7 @@ static void AppendSlide(Present_File* file, Parse_State* state) {
     next_slide->chapter_title_len = state->current_chapter_title_len;
     next_slide->subtitle = NULL;
     next_slide->next = NULL;
+    next_slide->exec_cmdLine = NULL;
     //fprintf(stderr, "=== SLIDE ===\n");
     if(state->last != NULL) {
         state->last->next = next_slide;
@@ -417,7 +416,7 @@ static void SetSubtitle(Present_File* file, Parse_State* state, const char* titl
     slide->subtitle = buf;
 }
 
-static void AppendToList(Present_File* file, Parse_State* state, int indent_level, const char* line, unsigned linelen) {
+static void AppendToList(Present_File* file, Parse_State* state, int indent_level, const char* line, unsigned linelen, float textScale) {
     auto slide = state->last;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
@@ -427,6 +426,7 @@ static void AppendToList(Present_File* file, Parse_State* state, int indent_leve
     node->hdr.type = LNODE_TEXT;
     node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
     node->text_length = linelen;
+    node->scale = textScale;
     char* buf = (char*)Arena_Alloc(file->mem, linelen + 1);
     memcpy(buf, line, linelen);
     buf[linelen] = 0;
@@ -510,7 +510,6 @@ static void AddProgramExecution(Present_File* file, Parse_State* state, const ch
         return;
     }
 
-
     auto slide = state->last;
     if(!slide) {
         fprintf(stderr, "No #SLIDE directive before content!\n");
@@ -519,21 +518,18 @@ static void AddProgramExecution(Present_File* file, Parse_State* state, const ch
 
     assert(slide);
 
-    auto node = (List_Node_Execute_Program*)Arena_Alloc(file->mem, sizeof(List_Node_Execute_Program));
-    node->hdr.type = LNODE_EXEC_CMDLINE;
-    node->hdr.next = node->hdr.children = node->hdr.parent = NULL;
-    node->command_line_len = command_line_len;
+    if(slide->exec_cmdLine) {
+        fprintf(stderr, "Duplicate #EXEC in slide %d\n", file->current_slide);
+        return;
+    }
+
     char* buf = (char*)Arena_Alloc(file->mem, command_line_len + 1);
     memcpy(buf, command_line, command_line_len);
     buf[command_line_len] = 0;
-    node->command_line = buf;
+    slide->exec_cmdLine = buf;
+    slide->exec_cmdline_len = command_line_len;
 
-    if(slide->content_cur) {
-        slide->content_cur->next = (Present_List_Node*)node;
-        slide->content_cur = (Present_List_Node*)node;
-    } else {
-        slide->content = slide->content_cur = (Present_List_Node*)node;
-    }
+    AppendToList(file, state, 0, command_line, command_line_len, TEXT_SCALE_EXEC);
 }
 
 static bool ParseFile(Present_File* file, FILE* f) {
@@ -607,7 +603,7 @@ static bool ParseFile(Present_File* file, FILE* f) {
                                     directive_len, directive);
                         }
                     } else {
-                        AppendToList(file, &pstate, indent_level, line_buf, line_length);
+                        AppendToList(file, &pstate, indent_level, line_buf, line_length, TEXT_SCALE_NORMAL);
                     }
                 }
             }
@@ -785,7 +781,7 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
             cmd = RQ_NewCmd<RQ_Draw_Text>(rq, RQCMD_DRAW_TEXT);
             cmd->x = VIRTUAL_X(state.x);
             cmd->y = VIRTUAL_Y(state.y);
-            cmd->size = VIRTUAL_Y(32);
+            cmd->size = text->scale * VIRTUAL_Y(32);
             cmd->text_len = text->text_length;
             cmd->text = text->text;
             cmd->font_name = file->font_general;
@@ -841,10 +837,6 @@ static void ProcessListElement(Present_File* file, Present_List_Node* node, Rend
                 cmd->width = cmd->height = 0;
                 cmd->buffer = NULL;
             }
-        } else if(cur->type == LNODE_EXEC_CMDLINE) {
-            RQ_Exec_CmdLine* cmd = NULL;
-            cmd = RQ_NewCmd<RQ_Exec_CmdLine>(rq, RQCMD_EXEC_CMDLINE);
-            cmd->cmdline = ((List_Node_Execute_Program*)cur)->command_line;
         }
         if(cur->children) {
             state.x += 24;
@@ -914,4 +906,28 @@ void Present_FillRenderQueue(Present_File* file, Render_Queue* rq) {
             PresentFillRQRegularSlide(file, slide, rq);
         }
     }
+}
+
+void Present_ExecuteCommandOnCurrentSlide(Present_File* file) {
+    if (!file)
+        return;
+    if (!file->current_slide_data)
+        return;
+    if(!file->current_slide_data->exec_cmdLine)
+        return;
+
+    const char* cmdline = file->current_slide_data->exec_cmdLine;
+
+#if _WIN32
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+
+    if(!CreateProcessA(NULL, (LPSTR)cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        DWORD dwLastError = GetLastError();
+        fprintf(stderr, "Failed to execute command line '%s' code %u\n", cmdline, dwLastError);
+    }
+#endif
 }
