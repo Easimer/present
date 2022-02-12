@@ -1,0 +1,8 @@
+﻿---
+BasedOnStyle: Microsoft
+BreakBeforeBraces: Attach
+ColumnLimit: '0'
+IndentWidth: '4'
+PointerAlignment: Left
+
+...
