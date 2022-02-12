@@ -7,3 +7,6 @@ present
 *.pdb
 *.obj
 vc*.pdb
+
+compile_commands.json
+.vscode/
