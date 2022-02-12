@@ -529,7 +529,7 @@ static void AddProgramExecution(Present_File* file, Parse_State* state, const ch
     slide->exec_cmdLine = buf;
     slide->exec_cmdline_len = command_line_len;
 
-    AppendToList(file, state, 0, command_line, command_line_len, TEXT_SCALE_EXEC);
+    AppendToList(file, state, slide->current_indent_level, command_line, command_line_len, TEXT_SCALE_EXEC);
 }
 
 static bool ParseFile(Present_File* file, FILE* f) {
@@ -929,5 +929,7 @@ void Present_ExecuteCommandOnCurrentSlide(Present_File* file) {
         DWORD dwLastError = GetLastError();
         fprintf(stderr, "Failed to execute command line '%s' code %u\n", cmdline, dwLastError);
     }
+#else
+    system(cmdline);
 #endif
 }
