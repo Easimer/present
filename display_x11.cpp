@@ -192,6 +192,9 @@ bool Display_FetchEvent(Display* disp, Display_Event& out) {
                         case 117: // Page down
                         out = DISPEV_END;
                         break;
+                        case 26: // E
+                        out = DISPEV_EXEC;
+                        break;
                         default:
                         ret = false;
                         break;
@@ -208,13 +211,14 @@ bool Display_FetchEvent(Display* disp, Display_Event& out) {
 void Display_RenderQueue(Display* disp, Render_Queue* rq) {
     assert(disp && rq && disp->conn);
     if(disp && rq && disp->conn) {
-        RQ_Draw_Cmd* cur = rq->commands;
+        auto hCur = rq->commands;
         
         // setup text drawing
         cairo_select_font_face(disp->cr, "serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_source_rgb(disp->cr, 0, 0, 0);
         
-        while(cur) {
+        while(hCur != MEM_ARENA_INVALID_OFFSET) {
+            auto* cur = (RQ_Draw_Cmd*)Arena_Resolve(rq->mem, hCur);
             switch(cur->cmd) {
                 case RQCMD_DRAW_TEXT: {
                     RQ_Draw_Text* dtxt = (RQ_Draw_Text*)cur;
@@ -262,7 +266,7 @@ void Display_RenderQueue(Display* disp, Render_Queue* rq) {
                 default:
                 break;
             }
-            cur = cur->next;
+            hCur = cur->next;
         }
         cairo_surface_flush(disp->surf);
         xcb_flush(disp->conn);
