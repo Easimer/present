@@ -58,7 +58,7 @@ void Display_ExecuteCommandLine(Display* disp, const char* cmdline);
 static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rClient, const Render_Queue* rq) {
     assert(rClient && rq);
     
-    RQ_Draw_Cmd* cur = rq->commands;
+    Mem_Arena_Offset hCur = rq->commands;
     HFONT fntCurrent = NULL;
     int font_size = 0;
     const char* font_name = NULL;
@@ -70,7 +70,9 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
     SetBkMode(hDC, TRANSPARENT);
     SetTextAlign(hDC, TA_BOTTOM);
     
-    while(cur) {
+    while(hCur != MEM_ARENA_INVALID_OFFSET) {
+        auto* cur = (RQ_Draw_Cmd*)Arena_Resolve(rq->mem, hCur);
+
         switch(cur->cmd) {
             case RQCMD_DRAW_TEXT: {
                 RQ_Draw_Text* dtxt = (RQ_Draw_Text*)cur;
@@ -156,8 +158,12 @@ static void ProcessRenderQueue(Display* disp, HWND hWnd, HDC hDC, const RECT* rC
                 DeleteObject(brRect);
                 break;
             }
+            default: {
+                fprintf(stderr, "Unknown render command type '%d'\n", cur->cmd);
+                break;
+            }
         }
-        cur = cur->next;
+        hCur = cur->next;
     }
     if(fntCurrent) {
         DeleteObject(fntCurrent);

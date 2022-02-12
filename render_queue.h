@@ -40,7 +40,7 @@ struct RGBA_Color {
 // Draw command - common fields
 struct RQ_Draw_Cmd {
     RQ_Cmd cmd;
-    RQ_Draw_Cmd* next;
+    Mem_Arena_Offset next;
 };
 
 // Draw text command
@@ -75,8 +75,8 @@ struct RQ_Draw_Rect {
 struct Render_Queue {
     Mem_Arena* mem;
     
-    RQ_Draw_Cmd* commands;
-    RQ_Draw_Cmd* last;
+    Mem_Arena_Offset commands;
+    Mem_Arena_Offset last;
 };
 
 // Tries to allocate a new render queue
@@ -97,7 +97,7 @@ inline T* RQ_NewCmd(Render_Queue* rq, RQ_Cmd cmd = RQCMD_INVALID) {
     T* ret = (T*)RQ_NewCmd(rq, sizeof(T));
     
     ret->hdr.cmd = cmd;
-    ret->hdr.next = NULL;
+    ret->hdr.next = MEM_ARENA_INVALID_OFFSET;
     
     return ret;
 }

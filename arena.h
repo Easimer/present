@@ -24,6 +24,8 @@ struct Mem_Arena;
 
 using Mem_Arena_Offset = uint32_t;
 
+#define MEM_ARENA_INVALID_OFFSET ((Mem_Arena_Offset)-1)
+
 // Creates a new area of a given size
 Mem_Arena* Arena_Create(unsigned size);
 
