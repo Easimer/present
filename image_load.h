@@ -17,7 +17,6 @@
 #pragma once
 #include "arena.h"
 
-// refcounted
 struct Promised_Image;
 
 struct Loaded_Image {
